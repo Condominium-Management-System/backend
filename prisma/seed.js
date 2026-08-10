@@ -1,462 +1,414 @@
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt  from "bcryptjs";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting database seed...");
 
-  // =========================================================
-  // 1. PASSWORDS
-  // =========================================================
-
   const adminPassword = await bcrypt.hash("Admin@123", 10);
   const residentPassword = await bcrypt.hash("Resident@123", 10);
-  const guardPassword = await bcrypt.hash("Guard@123", 10);
 
-  // =========================================================
-  // 2. CONDO
-  // =========================================================
-
-  const condo = await prisma.condo.upsert({
-    where: {
-      condoCode: "YEKONDO-001",
-    },
-    update: {},
-    create: {
-      condoCode: "YEKONDO-001",
-      condoName: "Ye Kondominium",
-      address: "Addis Ababa",
+  const condos = [
+    {
+      code: "YEKONDO-001",
+      name: "Ye Kondominium 01",
+      address: "Bole, Addis Ababa",
       city: "Addis Ababa",
-
-      gpsCoordinates: {
-        latitude: 9.03,
-        longitude: 38.74,
-      },
-
-      maxAdmins: 3,
-
-      blockNumbers: [
-        "A",
-        "B",
-        "C",
-      ],
-
-      activeStatus: true,
-
-      customSettings: {
-        lateFee: 50,
-        gracePeriod: 7,
-        currency: "ETB",
-        timezone: "Africa/Addis_Ababa",
-      },
-    },
-  });
-
-  console.log(`✅ Condo created: ${condo.condoName}`);
-
-  // =========================================================
-  // 3. SUPER ADMIN
-  // =========================================================
-
-  const superAdmin = await prisma.user.upsert({
-    where: {
-      email: "superadmin@yekondominium.com",
-    },
-    update: {
-      password: adminPassword,
-      role: "super_admin",
-      condoId: condo.id,
-      isVerified: true,
-      deletedAt: null,
-    },
-    create: {
-      fullName: "Super Administrator",
-      email: "superadmin@yekondominium.com",
-      phoneNumber: "0911000001",
-      password: adminPassword,
-      role: "super_admin",
-      condoId: condo.id,
-      isVerified: true,
-    },
-  });
-
-  console.log(`✅ Super admin: ${superAdmin.email}`);
-
-  // =========================================================
-  // 4. CONDO ADMIN
-  // =========================================================
-
-  const condoAdmin = await prisma.user.upsert({
-    where: {
-      email: "admin@yekondominium.com",
-    },
-    update: {
-      password: adminPassword,
-      role: "condo_admin",
-      condoId: condo.id,
-      isVerified: true,
-      deletedAt: null,
-    },
-    create: {
-      fullName: "Condo Administrator",
-      email: "admin@yekondominium.com",
-      phoneNumber: "0911000002",
-      password: adminPassword,
-      role: "condo_admin",
-      condoId: condo.id,
-      isVerified: true,
-    },
-  });
-
-  console.log(`✅ Condo admin: ${condoAdmin.email}`);
-
-  // =========================================================
-  // 5. GUARD
-  // =========================================================
-
-  const guard = await prisma.user.upsert({
-    where: {
-      email: "guard@yekondominium.com",
-    },
-    update: {
-      password: guardPassword,
-      role: "guard",
-      condoId: condo.id,
-      isVerified: true,
-      deletedAt: null,
-    },
-    create: {
-      fullName: "Security Guard",
-      email: "guard@yekondominium.com",
-      phoneNumber: "0911000003",
-      password: guardPassword,
-      role: "guard",
-      condoId: condo.id,
-      isVerified: true,
-    },
-  });
-
-  console.log(`✅ Guard: ${guard.email}`);
-
-  // =========================================================
-  // 6. RESIDENT
-  // =========================================================
-
-  const resident = await prisma.user.upsert({
-    where: {
-      email: "resident@yekondominium.com",
-    },
-    update: {
-      password: residentPassword,
-      role: "resident",
-      condoId: condo.id,
-      isVerified: true,
-      deletedAt: null,
-    },
-    create: {
-      fullName: "Test Resident",
-      email: "resident@yekondominium.com",
-      phoneNumber: "0911000004",
-      password: residentPassword,
-      role: "resident",
-      condoId: condo.id,
-      isVerified: true,
-      isInIddir: true,
-      isInEqub: true,
-    },
-  });
-
-  console.log(`✅ Resident: ${resident.email}`);
-
-  // =========================================================
-  // 7. BLOCK A
-  // =========================================================
-
-  const blockA = await prisma.block.upsert({
-    where: {
-      condoId_blockNo: {
-        condoId: condo.id,
-        blockNo: "A",
-      },
-    },
-    update: {},
-    create: {
-      condoId: condo.id,
-      blockNo: "A",
-      noRooms: 20,
-      noFloors: 5,
-      availableRooms: 19,
-      occupiedRooms: 1,
-    },
-  });
-
-  console.log(`✅ Block created: ${blockA.blockNo}`);
-
-  // =========================================================
-  // 8. BLOCK B
-  // =========================================================
-
-  const blockB = await prisma.block.upsert({
-    where: {
-      condoId_blockNo: {
-        condoId: condo.id,
-        blockNo: "B",
-      },
-    },
-    update: {},
-    create: {
-      condoId: condo.id,
-      blockNo: "B",
-      noRooms: 20,
-      noFloors: 5,
-      availableRooms: 20,
-      occupiedRooms: 0,
-    },
-  });
-
-  console.log(`✅ Block created: ${blockB.blockNo}`);
-
-  // =========================================================
-  // 9. BLOCK C
-  // =========================================================
-
-  const blockC = await prisma.block.upsert({
-    where: {
-      condoId_blockNo: {
-        condoId: condo.id,
-        blockNo: "C",
-      },
-    },
-    update: {},
-    create: {
-      condoId: condo.id,
-      blockNo: "C",
-      noRooms: 20,
-      noFloors: 5,
-      availableRooms: 20,
-      occupiedRooms: 0,
-    },
-  });
-
-  console.log(`✅ Block created: ${blockC.blockNo}`);
-
-  // =========================================================
-  // 10. RESIDENT ROOM
-  // =========================================================
-
-  const residentRoom = await prisma.room.upsert({
-    where: {
-      blockId_roomNo: {
-        blockId: blockA.id,
-        roomNo: "101",
-      },
-    },
-    update: {
-      occupiedById: resident.id,
-      status: "occupied",
-    },
-    create: {
-      condoId: condo.id,
-      blockId: blockA.id,
-      roomNo: "101",
-      floorNo: 1,
-      price: 500000,
-      model: "two_bedroom",
-      status: "occupied",
-      occupiedById: resident.id,
-    },
-  });
-
-  console.log(`✅ Resident room: ${residentRoom.roomNo}`);
-
-  // =========================================================
-  // 11. FREE ROOMS
-  // =========================================================
-
-  const rooms = [
-    {
-      blockId: blockA.id,
-      blockNo: "A",
-      roomNo: "102",
-      floorNo: 1,
+      blocks: ["A"],
     },
     {
-      blockId: blockA.id,
-      blockNo: "A",
-      roomNo: "103",
-      floorNo: 1,
+      code: "YEKONDO-002",
+      name: "Ye Kondominium 02",
+      address: "Kazanchis, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
     },
     {
-      blockId: blockB.id,
-      blockNo: "B",
-      roomNo: "101",
-      floorNo: 1,
+      code: "YEKONDO-003",
+      name: "Ye Kondominium 03",
+      address: "Megenagna, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
     },
     {
-      blockId: blockB.id,
-      blockNo: "B",
-      roomNo: "102",
-      floorNo: 1,
+      code: "YEKONDO-004",
+      name: "Ye Kondominium 04",
+      address: "Gerji, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
     },
     {
-      blockId: blockC.id,
-      blockNo: "C",
-      roomNo: "101",
-      floorNo: 1,
+      code: "YEKONDO-005",
+      name: "Ye Kondominium 05",
+      address: "CMC, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
+    },
+    {
+      code: "YEKONDO-006",
+      name: "Ye Kondominium 06",
+      address: "Ayat, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
+    },
+    {
+      code: "YEKONDO-007",
+      name: "Ye Kondominium 07",
+      address: "Lebu, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
+    },
+    {
+      code: "YEKONDO-008",
+      name: "Ye Kondominium 08",
+      address: "Jemo, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
+    },
+    {
+      code: "YEKONDO-009",
+      name: "Ye Kondominium 09",
+      address: "Sar Bet, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
+    },
+    {
+      code: "YEKONDO-010",
+      name: "Ye Kondominium 10",
+      address: "Summit, Addis Ababa",
+      city: "Addis Ababa",
+      blocks: ["A"],
     },
   ];
 
-  for (const room of rooms) {
+  const createdUsers = [];
+
+  for (let i = 0; i < condos.length; i++) {
+    const condoData = condos[i];
+
+    const condo = await prisma.condo.upsert({
+      where: {
+        condoCode: condoData.code,
+      },
+      update: {
+        condoName: condoData.name,
+        address: condoData.address,
+        city: condoData.city,
+        activeStatus: true,
+        blockNumbers: condoData.blocks,
+      },
+      create: {
+        condoCode: condoData.code,
+        condoName: condoData.name,
+        address: condoData.address,
+        city: condoData.city,
+        gpsCoordinates: {
+          latitude: 9.03 + i * 0.001,
+          longitude: 38.74 + i * 0.001,
+        },
+        maxAdmins: 3,
+        blockNumbers: condoData.blocks,
+        activeStatus: true,
+        customSettings: {
+          lateFee: 50,
+          gracePeriod: 7,
+          currency: "ETB",
+          timezone: "Africa/Addis_Ababa",
+        },
+      },
+    });
+
+    console.log(`✅ Condo ${i + 1}/10: ${condo.condoCode}`);
+
+    const adminEmail = `admin${i + 1}@yekondominium.com`;
+    const residentEmail = `resident${i + 1}@yekondominium.com`;
+
+    const adminPhone = `09110000${String(i + 1).padStart(2, "0")}`;
+    const residentPhone = `09220000${String(i + 1).padStart(2, "0")}`;
+
+    const adminFan = `100000000000${String(i + 1).padStart(4, "0")}`;
+    const residentFan = `200000000000${String(i + 1).padStart(4, "0")}`;
+
+    const admin = await prisma.user.upsert({
+      where: {
+        email: adminEmail,
+      },
+      update: {
+        fullName: `Condo Admin ${i + 1}`,
+        phoneNumber: adminPhone,
+        password: adminPassword,
+        role: "condo_admin",
+        condoId: condo.id,
+        condoCode: condo.condoCode,
+        fan: adminFan,
+        isVerified: true,
+        deletedAt: null,
+      },
+      create: {
+        fullName: `Condo Admin ${i + 1}`,
+        email: adminEmail,
+        phoneNumber: adminPhone,
+        password: adminPassword,
+        role: "condo_admin",
+        condoId: condo.id,
+        condoCode: condo.condoCode,
+        fan: adminFan,
+        isVerified: true,
+      },
+    });
+
+    console.log(`   👤 Admin: ${admin.email}`);
+
+    const resident = await prisma.user.upsert({
+      where: {
+        email: residentEmail,
+      },
+      update: {
+        fullName: `Resident ${i + 1}`,
+        phoneNumber: residentPhone,
+        password: residentPassword,
+        role: "resident",
+        condoId: condo.id,
+        condoCode: condo.condoCode,
+        fan: residentFan,
+        isVerified: true,
+        isInIddir: true,
+        isInEqub: true,
+        deletedAt: null,
+      },
+      create: {
+        fullName: `Resident ${i + 1}`,
+        email: residentEmail,
+        phoneNumber: residentPhone,
+        password: residentPassword,
+        role: "resident",
+        condoId: condo.id,
+        condoCode: condo.condoCode,
+        fan: residentFan,
+        isVerified: true,
+        isInIddir: true,
+        isInEqub: true,
+      },
+    });
+
+    console.log(`   👤 Resident: ${resident.email}`);
+
+    createdUsers.push(admin, resident);
+
+    const block = await prisma.block.upsert({
+      where: {
+        condoId_blockNo: {
+          condoId: condo.id,
+          blockNo: "A",
+        },
+      },
+      update: {
+        noRooms: 3,
+        noFloors: 3,
+        availableRooms: 2,
+        occupiedRooms: 1,
+        deletedAt: null,
+      },
+      create: {
+        condoId: condo.id,
+        blockNo: "A",
+        noRooms: 3,
+        noFloors: 3,
+        availableRooms: 2,
+        occupiedRooms: 1,
+      },
+    });
+
+    console.log(`   🏢 Block A created`);
+
     await prisma.room.upsert({
       where: {
         blockId_roomNo: {
-          blockId: room.blockId,
-          roomNo: room.roomNo,
+          blockId: block.id,
+          roomNo: "101",
         },
       },
-      update: {},
+      update: {
+        occupiedById: resident.id,
+        status: "occupied",
+        deletedAt: null,
+      },
       create: {
         condoId: condo.id,
-        blockId: room.blockId,
-        roomNo: room.roomNo,
-        floorNo: room.floorNo,
+        blockId: block.id,
+        roomNo: "101",
+        floorNo: 1,
+        price: 500000,
+        model: "two_bedroom",
+        status: "occupied",
+        occupiedById: resident.id,
+      },
+    });
+
+    await prisma.room.upsert({
+      where: {
+        blockId_roomNo: {
+          blockId: block.id,
+          roomNo: "102",
+        },
+      },
+      update: {
+        status: "free",
+        occupiedById: null,
+        deletedAt: null,
+      },
+      create: {
+        condoId: condo.id,
+        blockId: block.id,
+        roomNo: "102",
+        floorNo: 1,
         price: 500000,
         model: "two_bedroom",
         status: "free",
       },
     });
+
+    await prisma.room.upsert({
+      where: {
+        blockId_roomNo: {
+          blockId: block.id,
+          roomNo: "103",
+        },
+      },
+      update: {
+        status: "free",
+        occupiedById: null,
+        deletedAt: null,
+      },
+      create: {
+        condoId: condo.id,
+        blockId: block.id,
+        roomNo: "103",
+        floorNo: 1,
+        price: 500000,
+        model: "two_bedroom",
+        status: "free",
+      },
+    });
+
+    console.log(`   🚪 Rooms created`);
+
+    await prisma.announcement.create({
+      data: {
+        condoId: condo.id,
+        title: `Welcome to ${condo.condoName}`,
+        body: `Welcome to ${condo.condoName}. Residents can use the application for payments, reports, announcements, lost and found, chat and community services.`,
+        announcementType: "general",
+        isPinned: true,
+        createdById: admin.id,
+        createdByRole: "admin",
+        isPublic: true,
+      },
+    });
+
+    await prisma.promotion.create({
+      data: {
+        condoId: condo.id,
+        type: "shop",
+        title: `Local Shop - ${condo.condoCode}`,
+        description: "Sample shop promotion for testing.",
+        price: 100,
+        postedById: resident.id,
+        postedByRole: "resident",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        isActive: true,
+        contactNumber: residentPhone,
+      },
+    });
+
+    await prisma.equb.create({
+      data: {
+        condoId: condo.id,
+        createdById: admin.id,
+        name: `Monthly Equb - ${condo.condoCode}`,
+        noMembers: 1,
+        members: [
+          {
+            userId: resident.id,
+            status: "active",
+            joinDate: new Date().toISOString(),
+          },
+        ],
+        status: "active",
+        startDate: new Date(),
+        dueDate: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ),
+        contributionAmount: 1000,
+      },
+    });
+
+    await prisma.iddir.create({
+      data: {
+        condoId: condo.id,
+        createdById: admin.id,
+        name: `Community Iddir - ${condo.condoCode}`,
+        noMembers: 1,
+        members: [
+          {
+            userId: resident.id,
+            status: "active",
+            joinDate: new Date().toISOString(),
+          },
+        ],
+        status: "active",
+        startedDate: new Date(),
+        contributionAmount: 500,
+      },
+    });
+
+    console.log(`   📢 Announcement created`);
+    console.log(`   📣 Promotion created`);
+    console.log(`   💰 Equb created`);
+    console.log(`   🤝 Iddir created`);
   }
-
-  console.log("✅ Free rooms created");
-
-  // =========================================================
-  // 12. ANNOUNCEMENT
-  // =========================================================
-
-  await prisma.announcement.create({
-    data: {
-      condoId: condo.id,
-      title: "Welcome to Ye Kondominium",
-      body:
-        "Welcome to the Ye Kondominium Management System. Residents can use the application for payments, reports, announcements, lost and found, chat and community services.",
-      announcementType: "general",
-      isPinned: true,
-      createdById: condoAdmin.id,
-      createdByRole: "admin",
-      isPublic: true,
-    },
-  });
-
-  console.log("✅ Announcement created");
-
-  // =========================================================
-  // 13. PROMOTION
-  // =========================================================
-
-  await prisma.promotion.create({
-    data: {
-      condoId: condo.id,
-      type: "shop",
-      title: "Local Shop",
-      description: "Sample shop promotion for testing.",
-      price: 100,
-      postedById: resident.id,
-      postedByRole: "resident",
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      contactNumber: "0911000004",
-    },
-  });
-
-  console.log("✅ Promotion created");
-
-  // =========================================================
-  // 14. EQUb
-  // =========================================================
-
-  await prisma.equb.create({
-    data: {
-      condoId: condo.id,
-      createdById: condoAdmin.id,
-      name: "Monthly Community Equb",
-      noMembers: 1,
-
-      members: [
-        {
-          userId: resident.id,
-          status: "active",
-          joinDate: new Date().toISOString(),
-        },
-      ],
-
-      status: "active",
-
-      startDate: new Date(),
-
-      dueDate: new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000
-      ),
-
-      contributionAmount: 1000,
-    },
-  });
-
-  console.log("✅ Equb created");
-
-  // =========================================================
-  // 15. IDDIR
-  // =========================================================
-
-  await prisma.iddir.create({
-    data: {
-      condoId: condo.id,
-      createdById: condoAdmin.id,
-      name: "Community Iddir",
-      noMembers: 1,
-
-      members: [
-        {
-          userId: resident.id,
-          status: "active",
-          joinDate: new Date().toISOString(),
-        },
-      ],
-
-      status: "active",
-      startedDate: new Date(),
-      contributionAmount: 500,
-    },
-  });
-
-  console.log("✅ Iddir created");
-
-  // =========================================================
-  // 16. SUMMARY
-  // =========================================================
 
   console.log("\n========================================");
   console.log("🌱 DATABASE SEED COMPLETED");
   console.log("========================================");
 
-  console.log("\n🔐 LOGIN ACCOUNTS");
+  console.log("\n📊 SUMMARY");
+  console.log("Condominiums: 10");
+  console.log("Users: 20");
+  console.log("Admins: 10");
+  console.log("Residents: 10");
+  console.log("Blocks: 10");
+  console.log("Rooms: 30");
+  console.log("Announcements: 10");
+  console.log("Promotions: 10");
+  console.log("Equbs: 10");
+  console.log("Iddirs: 10");
 
-  console.log("\nSuper Admin");
-  console.log("Email: superadmin@yekondominium.com");
-  console.log("Password: Admin@123");
+  console.log("\n🔐 LOGIN INFORMATION");
 
-  console.log("\nCondo Admin");
-  console.log("Email: admin@yekondominium.com");
-  console.log("Password: Admin@123");
+  console.log("\nCondo Admins:");
+  for (let i = 1; i <= 10; i++) {
+    console.log(
+      `admin${i}@yekondominium.com / Admin@123`
+    );
+  }
 
-  console.log("\nGuard");
-  console.log("Email: guard@yekondominium.com");
-  console.log("Password: Guard@123");
+  console.log("\nResidents:");
+  for (let i = 1; i <= 10; i++) {
+    console.log(
+      `resident${i}@yekondominium.com / Resident@123`
+    );
+  }
 
-  console.log("\nResident");
-  console.log("Email: resident@yekondominium.com");
-  console.log("Password: Resident@123");
+  console.log("\n🏢 CONDO CODES:");
+
+  for (let i = 1; i <= 10; i++) {
+    console.log(
+      `YEKONDO-${String(i).padStart(3, "0")}`
+    );
+  }
 
   console.log("\n========================================");
 }
