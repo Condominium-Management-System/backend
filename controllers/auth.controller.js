@@ -5,7 +5,8 @@ import {
   logoutService,
   refreshTokenService,
   registerService,
-  resetPasswordService
+  resetPasswordService,
+  updateMyProfileService
 } from "../services/auth.service.js"
 import asyncHandler from "../utils/asyncHandler.js"
 
@@ -44,3 +45,21 @@ export const me = asyncHandler(async (req, res) => {
   const result = await getCurrentUserService(req.user.id)
   res.status(200).json({ success: true, data: result })
 })
+
+export const updateMyProfile = asyncHandler(
+  async (req, res) => {
+
+    const result =
+      await updateMyProfileService(
+        req.user.id,
+        req.body,
+        req.files
+      );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: result,
+    });
+  }
+);
