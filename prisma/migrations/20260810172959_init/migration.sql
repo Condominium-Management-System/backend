@@ -64,12 +64,13 @@ CREATE TABLE "users" (
     "password" TEXT NOT NULL,
     "role" "Role" NOT NULL DEFAULT 'resident',
     "condoId" TEXT,
+    "condoCode" TEXT,
     "block" TEXT,
     "roomNo" TEXT,
     "isVerified" BOOLEAN NOT NULL DEFAULT false,
     "profilePhoto" TEXT,
-    "fan" DOUBLE PRECISION,
-    "revenue" DOUBLE PRECISION,
+    "fan" VARCHAR(16) NOT NULL,
+    "revenue" DECIMAL(15,2),
     "frontId" TEXT,
     "backId" TEXT,
     "isInIddir" BOOLEAN NOT NULL DEFAULT false,
@@ -94,7 +95,7 @@ CREATE TABLE "users" (
 -- CreateTable
 CREATE TABLE "condos" (
     "id" TEXT NOT NULL,
-    "condoCode" TEXT NOT NULL,
+    "condoCode" VARCHAR(50) NOT NULL,
     "condoName" TEXT NOT NULL,
     "address" TEXT NOT NULL,
     "city" TEXT,
@@ -121,6 +122,7 @@ CREATE TABLE "blocks" (
     "availableRooms" INTEGER NOT NULL DEFAULT 0,
     "occupiedRooms" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "blocks_pkey" PRIMARY KEY ("id")
@@ -133,7 +135,7 @@ CREATE TABLE "rooms" (
     "blockId" TEXT NOT NULL,
     "roomNo" TEXT NOT NULL,
     "floorNo" INTEGER NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
+    "price" DECIMAL(15,2) NOT NULL,
     "model" "RoomModel" NOT NULL,
     "status" "RoomStatus" NOT NULL DEFAULT 'free',
     "occupiedById" TEXT,
@@ -155,7 +157,7 @@ CREATE TABLE "equibs" (
     "status" "EqubIddirStatus" NOT NULL DEFAULT 'pending',
     "startDate" TIMESTAMP(3) NOT NULL,
     "dueDate" TIMESTAMP(3) NOT NULL,
-    "contributionAmount" DOUBLE PRECISION NOT NULL,
+    "contributionAmount" DECIMAL(15,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -173,7 +175,7 @@ CREATE TABLE "iddirs" (
     "members" JSONB[],
     "status" "ActiveInactiveStatus" NOT NULL DEFAULT 'active',
     "startedDate" TIMESTAMP(3) NOT NULL,
-    "contributionAmount" DOUBLE PRECISION NOT NULL,
+    "contributionAmount" DECIMAL(15,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -187,7 +189,7 @@ CREATE TABLE "payments" (
     "userId" TEXT NOT NULL,
     "condoId" TEXT NOT NULL,
     "paymentType" "PaymentType" NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL,
+    "amount" DECIMAL(15,2) NOT NULL,
     "monthYear" TEXT NOT NULL,
     "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
     "paymentMethod" "PaymentMethod" NOT NULL,
@@ -215,7 +217,7 @@ CREATE TABLE "transactions" (
     "referenceNo" TEXT NOT NULL,
     "stamp" TEXT,
     "paymentType" "PaymentType",
-    "amount" DOUBLE PRECISION NOT NULL,
+    "amount" DECIMAL(15,2) NOT NULL,
     "monthYear" TEXT,
     "paymentMethod" "PaymentMethod",
     "status" "TransactionStatus" NOT NULL DEFAULT 'pending',
@@ -315,7 +317,7 @@ CREATE TABLE "promotions" (
     "type" "PromoType" NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
+    "price" DECIMAL(15,2) NOT NULL,
     "postedById" TEXT NOT NULL,
     "postedByRole" "CreatorRole",
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -336,6 +338,9 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "users_phoneNumber_key" ON "users"("phoneNumber");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "users_fan_key" ON "users"("fan");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "users_refreshToken_key" ON "users"("refreshToken");
 
 -- CreateIndex
@@ -345,19 +350,61 @@ CREATE UNIQUE INDEX "users_resetPasswordToken_key" ON "users"("resetPasswordToke
 CREATE UNIQUE INDEX "users_emailVerifyToken_key" ON "users"("emailVerifyToken");
 
 -- CreateIndex
-CREATE INDEX "users_email_idx" ON "users"("email");
+CREATE INDEX "users_condoId_idx" ON "users"("condoId");
 
 -- CreateIndex
-CREATE INDEX "users_phoneNumber_idx" ON "users"("phoneNumber");
+CREATE INDEX "users_condoCode_idx" ON "users"("condoCode");
+
+-- CreateIndex
+CREATE INDEX "users_role_idx" ON "users"("role");
+
+-- CreateIndex
+CREATE INDEX "users_deletedAt_idx" ON "users"("deletedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "condos_condoCode_key" ON "condos"("condoCode");
 
 -- CreateIndex
+CREATE INDEX "condos_deletedAt_idx" ON "condos"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "blocks_condoId_idx" ON "blocks"("condoId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "blocks_condoId_blockNo_key" ON "blocks"("condoId", "blockNo");
 
 -- CreateIndex
+CREATE INDEX "rooms_condoId_idx" ON "rooms"("condoId");
+
+-- CreateIndex
+CREATE INDEX "rooms_blockId_idx" ON "rooms"("blockId");
+
+-- CreateIndex
+CREATE INDEX "rooms_occupiedById_idx" ON "rooms"("occupiedById");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "rooms_blockId_roomNo_key" ON "rooms"("blockId", "roomNo");
+
+-- CreateIndex
+CREATE INDEX "equibs_condoId_idx" ON "equibs"("condoId");
+
+-- CreateIndex
+CREATE INDEX "equibs_createdById_idx" ON "equibs"("createdById");
+
+-- CreateIndex
+CREATE INDEX "equibs_status_idx" ON "equibs"("status");
+
+-- CreateIndex
+CREATE INDEX "iddirs_condoId_idx" ON "iddirs"("condoId");
+
+-- CreateIndex
+CREATE INDEX "iddirs_createdById_idx" ON "iddirs"("createdById");
+
+-- CreateIndex
+CREATE INDEX "iddirs_status_idx" ON "iddirs"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "payments_transactionId_key" ON "payments"("transactionId");
 
 -- CreateIndex
 CREATE INDEX "payments_userId_idx" ON "payments"("userId");
@@ -387,7 +434,91 @@ CREATE INDEX "transactions_receiverId_idx" ON "transactions"("receiverId");
 CREATE INDEX "transactions_referenceNo_idx" ON "transactions"("referenceNo");
 
 -- CreateIndex
+CREATE INDEX "transactions_status_idx" ON "transactions"("status");
+
+-- CreateIndex
 CREATE INDEX "transactions_deletedAt_idx" ON "transactions"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "announcements_condoId_idx" ON "announcements"("condoId");
+
+-- CreateIndex
+CREATE INDEX "announcements_createdById_idx" ON "announcements"("createdById");
+
+-- CreateIndex
+CREATE INDEX "announcements_announcementType_idx" ON "announcements"("announcementType");
+
+-- CreateIndex
+CREATE INDEX "announcements_deletedAt_idx" ON "announcements"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "reports_condoId_idx" ON "reports"("condoId");
+
+-- CreateIndex
+CREATE INDEX "reports_reporterId_idx" ON "reports"("reporterId");
+
+-- CreateIndex
+CREATE INDEX "reports_assignedToId_idx" ON "reports"("assignedToId");
+
+-- CreateIndex
+CREATE INDEX "reports_status_idx" ON "reports"("status");
+
+-- CreateIndex
+CREATE INDEX "reports_priority_idx" ON "reports"("priority");
+
+-- CreateIndex
+CREATE INDEX "reports_deletedAt_idx" ON "reports"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_condoId_idx" ON "lost_and_found"("condoId");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_userId_idx" ON "lost_and_found"("userId");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_claimedById_idx" ON "lost_and_found"("claimedById");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_verifiedById_idx" ON "lost_and_found"("verifiedById");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_status_idx" ON "lost_and_found"("status");
+
+-- CreateIndex
+CREATE INDEX "lost_and_found_deletedAt_idx" ON "lost_and_found"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "chat_messages_condoId_idx" ON "chat_messages"("condoId");
+
+-- CreateIndex
+CREATE INDEX "chat_messages_senderId_idx" ON "chat_messages"("senderId");
+
+-- CreateIndex
+CREATE INDEX "chat_messages_receiverId_idx" ON "chat_messages"("receiverId");
+
+-- CreateIndex
+CREATE INDEX "chat_messages_isRead_idx" ON "chat_messages"("isRead");
+
+-- CreateIndex
+CREATE INDEX "chat_messages_deletedAt_idx" ON "chat_messages"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "promotions_condoId_idx" ON "promotions"("condoId");
+
+-- CreateIndex
+CREATE INDEX "promotions_postedById_idx" ON "promotions"("postedById");
+
+-- CreateIndex
+CREATE INDEX "promotions_type_idx" ON "promotions"("type");
+
+-- CreateIndex
+CREATE INDEX "promotions_isActive_idx" ON "promotions"("isActive");
+
+-- CreateIndex
+CREATE INDEX "promotions_expiresAt_idx" ON "promotions"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "promotions_deletedAt_idx" ON "promotions"("deletedAt");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
