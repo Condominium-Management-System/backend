@@ -4,24 +4,80 @@ import {
   createBlock,
   getAllBlocks,
   getBlockById,
+  getBlockStatistics,
   updateBlock,
   deleteBlock
 } from "../controllers/block.controller.js";
 
-import { authenticate } from "../middleware/auth.middleware.js";
+import { authenticate} from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
 import { Roles } from "../config/roles.config.js";
+const router = express.Router();
 
-const blockRouter = express.Router();
 
-blockRouter.post("/",authenticate,authorizeRoles(Roles.RESIDENT,Roles.RESIDENT),createBlock);
+// GET ALL
 
-blockRouter.get("/",getAllBlocks);
+router.get(
+  "/",
+  authenticate,
+  getAllBlocks
+);
 
-blockRouter.get("/:id",getBlockById);
 
-blockRouter.patch("/:id",authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),updateBlock);
+// GET STATISTICS
 
-blockRouter.delete("/:id",authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),deleteBlock);
+router.get(
+  "/:id/statistics",
+  authenticate,
+  getBlockStatistics
+);
 
-export default blockRouter;
+
+// GET ONE
+
+router.get(
+  "/:id",
+  authenticate,
+  getBlockById
+);
+
+
+// CREATE
+
+router.post(
+  "/",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  createBlock
+);
+
+
+// UPDATE
+
+router.patch(
+  "/:id",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  updateBlock
+);
+
+
+// DELETE
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  deleteBlock
+);
+
+export default router;
