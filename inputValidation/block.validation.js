@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-export const blockValidation = Joi.object({
+export const createBlockValidation = Joi.object({
   condoId: Joi.string()
     .uuid()
     .required()
@@ -41,4 +41,33 @@ export const blockValidation = Joi.object({
       "number.min": "A block must have at least one floor",
       "any.required": "Number of floors is required"
     })
+});
+
+export const updateBlockValidation = Joi.object({
+  blockNo: Joi.string()
+    .trim()
+    .max(20)
+    .messages({
+      "string.max": "Block number cannot exceed 20 characters"
+    }),
+
+  noRooms: Joi.number()
+    .integer()
+    .min(1)
+    .messages({
+      "number.base": "Number of rooms must be a number",
+      "number.integer": "Number of rooms must be an integer",
+      "number.min": "A block must have at least one room"
+    }),
+
+  noFloors: Joi.number()
+    .integer()
+    .min(1)
+    .messages({
+      "number.base": "Number of floors must be a number",
+      "number.integer": "Number of floors must be an integer",
+      "number.min": "A block must have at least one floor"
+    }),
+
+  condoId: Joi.forbidden()
 });
