@@ -1,53 +1,186 @@
 import {
-  forgotPasswordService,
-  getCurrentUserService,
-  loginService,
-  logoutService,
-  refreshTokenService,
   registerService,
+  loginService,
+  refreshTokenService,
+  logoutService,
+  forgotPasswordService,
   resetPasswordService,
-  updateMyProfileService
-} from "../services/auth.service.js"
-import asyncHandler from "../utils/asyncHandler.js"
+  getCurrentUserService,
+  updateMyProfileService,
+} from "../services/auth.service.js";
 
-export const register = asyncHandler(async (req, res) => {
-  const result = await registerService(req.body)
-  res.status(201).json({ success: true, message: "Account created successfully", data: result })
-})
 
-export const login = asyncHandler(async (req, res) => {
-  const result = await loginService(req.body)
-  res.status(200).json({ success: true, message: "Login successful", data: result })
-})
+// REGISTER
 
-export const logout = asyncHandler(async (req, res) => {
-  const result = await logoutService(req.user.id)
-  res.status(200).json({ success: true, message: "Logout successful", data: result })
-})
+export const register = async (req, res, next) => {
+  try {
 
-export const forgotPassword = asyncHandler(async (req, res) => {
-  const result = await forgotPasswordService(req.body)
-  res.status(200).json({ success: true, message: "Password reset request processed", data: result })
-})
+    const result =
+      await registerService(req.body);
 
-export const resetPassword = asyncHandler(async (req, res) => {
-  const result = await resetPasswordService(req.body)
-  res.status(200).json({ success: true, message: "Password reset successful", data: result })
-})
+    return res.status(201).json({
+      success: true,
+      message: "Registration successful",
+      data: result,
+    });
 
-export const refreshToken = asyncHandler(async (req, res) => {
-  const token = req.body.refreshToken || req.headers["x-refresh-token"]
-  const result = await refreshTokenService(token)
-  res.status(200).json({ success: true, message: "Token refreshed successfully", data: result })
-})
+  } catch (error) {
+    next(error);
+  }
+};
 
-export const me = asyncHandler(async (req, res) => {
-  const result = await getCurrentUserService(req.user.id)
-  res.status(200).json({ success: true, data: result })
-})
 
-export const updateMyProfile = asyncHandler(
-  async (req, res) => {
+// LOGIN
+
+export const login = async (req, res, next) => {
+  try {
+
+    const result =
+      await loginService(req.body);
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// REFRESH
+
+export const refreshToken = async (
+  req,
+  res,
+  next
+) => {
+  try {
+
+    const token =
+      req.body.refreshToken;
+
+    const result =
+      await refreshTokenService(token);
+
+    return res.status(200).json({
+      success: true,
+      message: "Token refreshed successfully",
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// LOGOUT
+
+export const logout = async (
+  req,
+  res,
+  next
+) => {
+  try {
+
+    const result =
+      await logoutService(req.user.id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Logout successful",
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// FORGOT PASSWORD
+
+export const forgotPassword = async (
+  req,
+  res,
+  next
+) => {
+  try {
+
+    const result =
+      await forgotPasswordService(req.body);
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// RESET PASSWORD
+
+export const resetPassword = async (
+  req,
+  res,
+  next
+) => {
+  try {
+
+    const result =
+      await resetPasswordService(req.body);
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully",
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ME
+
+export const me = async (
+  req,
+  res,
+  next
+) => {
+  try {
+
+    const result =
+      await getCurrentUserService(
+        req.user.id
+      );
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// UPDATE MY PROFILE
+
+export const updateMyProfile = async (
+  req,
+  res,
+  next
+) => {
+  try {
 
     const result =
       await updateMyProfileService(
@@ -56,10 +189,13 @@ export const updateMyProfile = asyncHandler(
         req.files
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       data: result,
     });
+
+  } catch (error) {
+    next(error);
   }
-);
+};
