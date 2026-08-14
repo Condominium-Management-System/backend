@@ -1,27 +1,33 @@
 import crypto from "crypto";
 
 import AppError from "../errorhandler/AppError.js";
-import { Roles } from "../config/roles.config.js";
 import { prisma } from "../config/prisma.config.js";
+import { Roles } from "../config/roles.config.js";
+
 import { findUserByEmail } from "../utils/findUserByEmail.js";
 import { findUserByIdService } from "../utils/FindUserById.js";
+
 import { toPublicUser } from "../utils/sanitizeingUser.js";
+
 import {
   hashPassword,
   comparePassword,
 } from "../utils/password.js";
-import { sendPasswordResetEmail } from "../utils/emailService.js";
+
 import {
   signAccessToken,
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt.js";
-import userValidation from "../inputValidation/user.validation.js";
-import uploadToCloudinary  from "../utils/uploadToCloudinary.js";
 
-// ======================================================
+import { sendPasswordResetEmail } from "../utils/emailService.js";
+
+import userValidation from "../inputValidation/user.validation.js";
+
+import uploadToCloudinary from "../utils/uploadToCloudinary.js";
+
+
 // AUTH PAYLOAD
-// ======================================================
 
 const buildAuthPayload = (user) => {
   const accessToken = signAccessToken(user);
@@ -34,23 +40,14 @@ const buildAuthPayload = (user) => {
   };
 };
 
-// ======================================================
+
 // REGISTER
-// ======================================================
 
 export const registerService = async (payload) => {
-  const fullName = payload?.fullName?.trim();
-  const email = payload?.email?.trim().toLowerCase();
-  const phoneNumber = payload?.phoneNumber?.trim();
-  const condoCode = payload?.condoCode?.trim();
-  const fan = payload?.fan?.trim();
-  const password = payload?.password?.trim();
 
-  // ----------------------------------------------------
-  // VALIDATION
-  // ----------------------------------------------------
+  // VALIDATE INPUT
 
-  const { error } = userValidation.validate(payload);
+  const { error, value } = userValidation.validate(payload);
 
   if (error) {
     throw new AppError(
@@ -59,9 +56,14 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK EMAIL
-  // ----------------------------------------------------
+  const fullName = value.fullName.trim();
+  const email = value.email.trim().toLowerCase();
+  const phoneNumber = value.phoneNumber.trim();
+  const condoCode = value.condoCode.trim();
+  const fan = value.fan.trim();
+  const password = value.password;
+
+  // EMAIL
 
   const existingEmail = await findUserByEmail(email);
 
@@ -72,9 +74,7 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK PHONE
-  // ----------------------------------------------------
+  // PHONE
 
   const existingPhone = await prisma.user.findUnique({
     where: {
@@ -89,9 +89,7 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK FAN
-  // ----------------------------------------------------
+  // FAN
 
   const existingFan = await prisma.user.findUnique({
     where: {
@@ -106,13 +104,12 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // FIND CONDO USING CONDO CODE
-  // ----------------------------------------------------
+  // FIND CONDOMINIUM
 
-  const condo = await prisma.condo.findUnique({
+  const condo = await prisma.condo.findFirst({
     where: {
       condoCode,
+      deletedAt: null,
     },
   });
 
@@ -123,9 +120,7 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK CONDO STATUS
-  // ----------------------------------------------------
+  // CHECK CONDOMINIUM
 
   if (!condo.activeStatus) {
     throw new AppError(
@@ -134,15 +129,16 @@ export const registerService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
   // HASH PASSWORD
-  // ----------------------------------------------------
 
   const hashedPassword = await hashPassword(password);
 
-  // ----------------------------------------------------
   // CREATE USER
-  // ----------------------------------------------------
+  //
+  // IMPORTANT:
+  // Every self-registered user starts as RESIDENT.
+  //
+  // Admin/guard promotion happens later.
 
   const user = await prisma.user.create({
     data: {
@@ -151,29 +147,24 @@ export const registerService = async (payload) => {
       phoneNumber,
       password: hashedPassword,
 
-      // 16 digit FAN
       fan,
 
       role: Roles.RESIDENT,
 
-      // Real UUID relation
       condoId: condo.id,
-
-      // Human-readable condo code
       condoCode: condo.condoCode,
+
+      // Admin must verify later
+      isVerified: false,
     },
   });
 
-  // ----------------------------------------------------
-  // CREATE TOKENS
-  // ----------------------------------------------------
+  // TOKENS
 
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
 
-  // ----------------------------------------------------
-  // STORE REFRESH TOKEN
-  // ----------------------------------------------------
+  // SAVE REFRESH TOKEN
 
   const updatedUser = await prisma.user.update({
     where: {
@@ -185,9 +176,7 @@ export const registerService = async (payload) => {
     },
   });
 
-  // ----------------------------------------------------
   // RESPONSE
-  // ----------------------------------------------------
 
   return {
     user: toPublicUser(updatedUser),
@@ -196,30 +185,40 @@ export const registerService = async (payload) => {
   };
 };
 
-// ======================================================
+
 // LOGIN
-// ======================================================
 
 export const loginService = async (payload) => {
   const email = payload?.email?.trim().toLowerCase();
+  const phoneNumber = payload?.phoneNumber?.trim();
   const password = payload?.password;
 
-  // ----------------------------------------------------
   // VALIDATION
-  // ----------------------------------------------------
 
-  if (!email || !password) {
+  if ((!email && !phoneNumber) || !password) {
     throw new AppError(
-      "Email and password are required",
+      "Email or phone number and password are required",
       400
     );
   }
 
-  // ----------------------------------------------------
   // FIND USER
-  // ----------------------------------------------------
 
-  const user = await findUserByEmail(email);
+  let user = null;
+
+  if (email) {
+    user = await findUserByEmail(email);
+  }
+
+  if (!user && phoneNumber) {
+    user = await prisma.user.findUnique({
+      where: {
+        phoneNumber,
+      },
+    });
+  }
+
+  // USER NOT FOUND
 
   if (!user) {
     throw new AppError(
@@ -228,9 +227,16 @@ export const loginService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK PASSWORD
-  // ----------------------------------------------------
+  // DELETED ACCOUNT
+
+  if (user.deletedAt) {
+    throw new AppError(
+      "User account has been deleted",
+      403
+    );
+  }
+
+  // PASSWORD
 
   const passwordMatches = await comparePassword(
     password,
@@ -244,27 +250,33 @@ export const loginService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK ACCOUNT
-  // ----------------------------------------------------
+  // CONDO CHECK
 
-  if (user.deletedAt) {
-    throw new AppError(
-      "User account has been deleted",
-      403
-    );
+  if (
+    user.condoId &&
+    user.role !== Roles.SUPER_ADMIN
+  ) {
+    const condo = await prisma.condo.findFirst({
+      where: {
+        id: user.condoId,
+        deletedAt: null,
+      },
+    });
+
+    if (!condo || !condo.activeStatus) {
+      throw new AppError(
+        "Your condominium account is inactive",
+        403
+      );
+    }
   }
 
-  // ----------------------------------------------------
-  // CREATE TOKENS
-  // ----------------------------------------------------
+  // TOKENS
 
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
 
-  // ----------------------------------------------------
-  // STORE REFRESH TOKEN
-  // ----------------------------------------------------
+  // SAVE REFRESH TOKEN
 
   const updatedUser = await prisma.user.update({
     where: {
@@ -276,9 +288,7 @@ export const loginService = async (payload) => {
     },
   });
 
-  // ----------------------------------------------------
   // RESPONSE
-  // ----------------------------------------------------
 
   return {
     user: toPublicUser(updatedUser),
@@ -287,21 +297,18 @@ export const loginService = async (payload) => {
   };
 };
 
-// ======================================================
 // REFRESH TOKEN
-// ======================================================
 
-export const refreshTokenService = async (refreshToken) => {
+export const refreshTokenService = async (
+  refreshToken
+) => {
+
   if (!refreshToken) {
     throw new AppError(
       "Refresh token is required",
       400
     );
   }
-
-  // ----------------------------------------------------
-  // VERIFY JWT
-  // ----------------------------------------------------
 
   let payload;
 
@@ -314,9 +321,7 @@ export const refreshTokenService = async (refreshToken) => {
     );
   }
 
-  // ----------------------------------------------------
   // FIND USER
-  // ----------------------------------------------------
 
   const user = await findUserByIdService(
     payload.sub
@@ -329,9 +334,7 @@ export const refreshTokenService = async (refreshToken) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK DELETED ACCOUNT
-  // ----------------------------------------------------
+  // DELETED
 
   if (user.deletedAt) {
     throw new AppError(
@@ -340,9 +343,7 @@ export const refreshTokenService = async (refreshToken) => {
     );
   }
 
-  // ----------------------------------------------------
-  // CHECK STORED TOKEN
-  // ----------------------------------------------------
+  // STORED TOKEN
 
   if (
     !user.refreshToken ||
@@ -354,18 +355,12 @@ export const refreshTokenService = async (refreshToken) => {
     );
   }
 
-  // ----------------------------------------------------
-  // ROTATE TOKENS
-  // ----------------------------------------------------
+  // ROTATE
 
   const accessToken = signAccessToken(user);
   const newRefreshToken = signRefreshToken(user);
 
-  // ----------------------------------------------------
-  // STORE NEW REFRESH TOKEN
-  // ----------------------------------------------------
-
-  const updatedUser = await prisma.user.update({
+  await prisma.user.update({
     where: {
       id: user.id,
     },
@@ -375,22 +370,18 @@ export const refreshTokenService = async (refreshToken) => {
     },
   });
 
-  // ----------------------------------------------------
-  // RESPONSE
-  // ----------------------------------------------------
-
   return {
-    user: toPublicUser(updatedUser),
+    user: toPublicUser(user),
     accessToken,
     refreshToken: newRefreshToken,
   };
 };
 
-// ======================================================
+
 // LOGOUT
-// ======================================================
 
 export const logoutService = async (userId) => {
+
   const user = await prisma.user.findUnique({
     where: {
       id: String(userId),
@@ -406,7 +397,7 @@ export const logoutService = async (userId) => {
 
   await prisma.user.update({
     where: {
-      id: String(userId),
+      id: user.id,
     },
 
     data: {
@@ -419,11 +410,13 @@ export const logoutService = async (userId) => {
   };
 };
 
-// ======================================================
-// FORGOT PASSWORD
-// ======================================================
 
-export const forgotPasswordService = async (payload) => {
+// FORGOT PASSWORD
+
+export const forgotPasswordService = async (
+  payload
+) => {
+
   const email = payload?.email?.trim().toLowerCase();
 
   if (!email) {
@@ -435,7 +428,7 @@ export const forgotPasswordService = async (payload) => {
 
   const user = await findUserByEmail(email);
 
-  // Do not reveal whether email exists
+  // Don't reveal whether account exists
   if (!user) {
     return {
       message:
@@ -443,34 +436,26 @@ export const forgotPasswordService = async (payload) => {
     };
   }
 
-  // ----------------------------------------------------
-  // GENERATE RANDOM TOKEN
-  // ----------------------------------------------------
+  // GENERATE TOKEN
 
   const resetToken = crypto
     .randomBytes(32)
     .toString("hex");
 
-  // ----------------------------------------------------
   // HASH TOKEN
-  // ----------------------------------------------------
 
   const hashedResetToken = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
 
-  // ----------------------------------------------------
   // EXPIRATION
-  // ----------------------------------------------------
 
   const expiresAt = new Date(
     Date.now() + 15 * 60 * 1000
   );
 
-  // ----------------------------------------------------
-  // SAVE TOKEN
-  // ----------------------------------------------------
+  // SAVE
 
   await prisma.user.update({
     where: {
@@ -483,16 +468,12 @@ export const forgotPasswordService = async (payload) => {
     },
   });
 
-  // ----------------------------------------------------
-  // RESET URL
-  // ----------------------------------------------------
+  // URL
 
   const resetUrl =
     `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-  // ----------------------------------------------------
-  // SEND EMAIL
-  // ----------------------------------------------------
+  // EMAIL
 
   await sendPasswordResetEmail(
     user.email,
@@ -505,11 +486,13 @@ export const forgotPasswordService = async (payload) => {
   };
 };
 
-// ======================================================
-// RESET PASSWORD
-// ======================================================
 
-export const resetPasswordService = async (payload) => {
+// RESET PASSWORD
+
+export const resetPasswordService = async (
+  payload
+) => {
+
   const token = payload?.token;
   const newPassword = payload?.password;
 
@@ -520,10 +503,6 @@ export const resetPasswordService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
-  // VALIDATE PASSWORD
-  // ----------------------------------------------------
-
   if (newPassword.length < 8) {
     throw new AppError(
       "Password must be at least 8 characters",
@@ -531,18 +510,14 @@ export const resetPasswordService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
   // HASH TOKEN
-  // ----------------------------------------------------
 
   const hashedToken = crypto
     .createHash("sha256")
     .update(token)
     .digest("hex");
 
-  // ----------------------------------------------------
   // FIND USER
-  // ----------------------------------------------------
 
   const user = await prisma.user.findFirst({
     where: {
@@ -561,16 +536,12 @@ export const resetPasswordService = async (payload) => {
     );
   }
 
-  // ----------------------------------------------------
   // HASH PASSWORD
-  // ----------------------------------------------------
 
   const hashedPassword =
     await hashPassword(newPassword);
 
-  // ----------------------------------------------------
-  // UPDATE PASSWORD
-  // ----------------------------------------------------
+  // UPDATE
 
   await prisma.user.update({
     where: {
@@ -581,7 +552,6 @@ export const resetPasswordService = async (payload) => {
       password: hashedPassword,
 
       resetPasswordToken: null,
-
       resetPasswordExpires: null,
 
       refreshToken: null,
@@ -593,12 +563,16 @@ export const resetPasswordService = async (payload) => {
   };
 };
 
-// ======================================================
-// CURRENT USER
-// ======================================================
 
-export const getCurrentUserService = async (userId) => {
-  const user = await findUserByIdService(userId);
+// CURRENT USER
+
+export const getCurrentUserService = async (
+  userId
+) => {
+
+  const user = await findUserByIdService(
+    userId
+  );
 
   if (!user) {
     throw new AppError(
@@ -607,23 +581,26 @@ export const getCurrentUserService = async (userId) => {
     );
   }
 
+  if (user.deletedAt) {
+    throw new AppError(
+      "User account has been deleted",
+      403
+    );
+  }
+
   return {
     user: toPublicUser(user),
   };
 };
 
-// ======================================================
+
 // UPDATE MY PROFILE
-// ======================================================
 
 export const updateMyProfileService = async (
   userId,
   payload,
   files
 ) => {
-  // ----------------------------------------------------
-  // FIND USER
-  // ----------------------------------------------------
 
   const user = await prisma.user.findUnique({
     where: {
@@ -638,33 +615,29 @@ export const updateMyProfileService = async (
     );
   }
 
-  // ----------------------------------------------------
-  // ALLOWED FIELDS
-  // ----------------------------------------------------
+  if (user.deletedAt) {
+    throw new AppError(
+      "User account has been deleted",
+      403
+    );
+  }
 
   const {
     fullName,
     email,
     phoneNumber,
     fan,
+    password,
   } = payload;
 
   const data = {};
 
-  // ----------------------------------------------------
   // FULL NAME
-  // ----------------------------------------------------
 
   if (fullName !== undefined) {
+
     const cleanedFullName =
       fullName.trim();
-
-    if (!cleanedFullName) {
-      throw new AppError(
-        "Full name cannot be empty",
-        400
-      );
-    }
 
     if (cleanedFullName.length < 3) {
       throw new AppError(
@@ -676,11 +649,10 @@ export const updateMyProfileService = async (
     data.fullName = cleanedFullName;
   }
 
-  // ----------------------------------------------------
   // EMAIL
-  // ----------------------------------------------------
 
   if (email !== undefined) {
+
     const cleanedEmail =
       email.trim().toLowerCase();
 
@@ -692,14 +664,15 @@ export const updateMyProfileService = async (
     }
 
     if (cleanedEmail !== user.email) {
-      const existingEmail =
+
+      const existing =
         await prisma.user.findUnique({
           where: {
             email: cleanedEmail,
           },
         });
 
-      if (existingEmail) {
+      if (existing) {
         throw new AppError(
           "Email is already registered",
           409
@@ -710,20 +683,12 @@ export const updateMyProfileService = async (
     }
   }
 
-  // ----------------------------------------------------
-  // PHONE NUMBER
-  // ----------------------------------------------------
+  // PHONE
 
   if (phoneNumber !== undefined) {
+
     const cleanedPhone =
       phoneNumber.trim();
-
-    if (!cleanedPhone) {
-      throw new AppError(
-        "Phone number cannot be empty",
-        400
-      );
-    }
 
     if (
       !/^(09|07)\d{8}$|^\+251[79]\d{8}$/.test(
@@ -731,22 +696,21 @@ export const updateMyProfileService = async (
       )
     ) {
       throw new AppError(
-        "Phone number must be 10 digits starting with 09 or 07, or +251 followed by 9 digits",
+        "Invalid Ethiopian phone number",
         400
       );
     }
 
-    if (
-      cleanedPhone !== user.phoneNumber
-    ) {
-      const existingPhone =
+    if (cleanedPhone !== user.phoneNumber) {
+
+      const existing =
         await prisma.user.findUnique({
           where: {
             phoneNumber: cleanedPhone,
           },
         });
 
-      if (existingPhone) {
+      if (existing) {
         throw new AppError(
           "Phone number is already registered",
           409
@@ -757,20 +721,12 @@ export const updateMyProfileService = async (
     }
   }
 
-  // ----------------------------------------------------
   // FAN
-  // ----------------------------------------------------
 
   if (fan !== undefined) {
+
     const cleanedFan =
       fan.trim();
-
-    if (!cleanedFan) {
-      throw new AppError(
-        "FAN number cannot be empty",
-        400
-      );
-    }
 
     if (!/^\d{16}$/.test(cleanedFan)) {
       throw new AppError(
@@ -780,14 +736,15 @@ export const updateMyProfileService = async (
     }
 
     if (cleanedFan !== user.fan) {
-      const existingFan =
+
+      const existing =
         await prisma.user.findUnique({
           where: {
             fan: cleanedFan,
           },
         });
 
-      if (existingFan) {
+      if (existing) {
         throw new AppError(
           "FAN number is already registered",
           409
@@ -798,12 +755,31 @@ export const updateMyProfileService = async (
     }
   }
 
-  
-  // ----------------------------------------------------
+  // PASSWORD
+
+  if (password !== undefined) {
+
+    const cleanedPassword =
+      password.trim();
+
+    if (cleanedPassword.length < 8) {
+      throw new AppError(
+        "Password must be at least 8 characters",
+        400
+      );
+    }
+
+    data.password =
+      await hashPassword(cleanedPassword);
+
+    // Invalidate old sessions
+    data.refreshToken = null;
+  }
+
   // PROFILE PHOTO
-  // ----------------------------------------------------
 
   if (files?.profilePhoto?.[0]) {
+
     const result =
       await uploadToCloudinary(
         files.profilePhoto[0].buffer,
@@ -814,11 +790,10 @@ export const updateMyProfileService = async (
       result.secure_url;
   }
 
-  // ----------------------------------------------------
   // FRONT ID
-  // ----------------------------------------------------
 
   if (files?.frontId?.[0]) {
+
     const result =
       await uploadToCloudinary(
         files.frontId[0].buffer,
@@ -829,11 +804,10 @@ export const updateMyProfileService = async (
       result.secure_url;
   }
 
-  // ----------------------------------------------------
   // BACK ID
-  // ----------------------------------------------------
 
   if (files?.backId?.[0]) {
+
     const result =
       await uploadToCloudinary(
         files.backId[0].buffer,
@@ -844,9 +818,7 @@ export const updateMyProfileService = async (
       result.secure_url;
   }
 
-  // ----------------------------------------------------
-  // NOTHING TO UPDATE
-  // ----------------------------------------------------
+  // NOTHING
 
   if (Object.keys(data).length === 0) {
     throw new AppError(
@@ -855,9 +827,7 @@ export const updateMyProfileService = async (
     );
   }
 
-  // ----------------------------------------------------
-  // UPDATE USER
-  // ----------------------------------------------------
+  // UPDATE
 
   const updatedUser =
     await prisma.user.update({
@@ -866,37 +836,9 @@ export const updateMyProfileService = async (
       },
 
       data,
-
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        fan: true,
-        phoneNumber: true,
-        role: true,
-
-        condoId: true,
-        condoCode: true,
-
-        block: true,
-        roomNo: true,
-
-        profilePhoto: true,
-        frontId: true,
-        backId: true,
-
-        isVerified: true,
-        isInIddir: true,
-        isInEqub: true,
-        isGetEqub: true,
-
-        registerDate: true,
-        dueDate: true,
-
-        createdAt: true,
-        updatedAt: true,
-      },
     });
 
-  return updatedUser;
+  return {
+    user: toPublicUser(updatedUser),
+  };
 };

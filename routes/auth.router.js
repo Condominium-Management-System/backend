@@ -1,26 +1,43 @@
-import { Router } from "express"
+import { Router } from "express";
+
 import {
-  forgotPassword,
+  register,
   login,
   logout,
   me,
   refreshToken,
-  register,
+  forgotPassword,
   resetPassword,
-  updateMyProfile
-} from "../controllers/auth.controller.js"
-import { authenticate } from "../middleware/auth.middleware.js"
+  updateMyProfile,
+} from "../controllers/auth.controller.js";
+
+import { authenticate } from "../middleware/auth.middleware.js";
 import upload from "../middleware/upload.middleware.js";
 
-const router = Router()
+const router = Router();
 
-router.post("/register", register)
-router.post("/login", login)
-router.post("/forgot-password", forgotPassword)
-router.post("/reset-password", resetPassword)
-router.post("/refresh-token", refreshToken)
-router.post("/logout", authenticate, logout)
-router.get("/me", authenticate, me)
+
+// Public
+router.post("/register", register);
+router.post("/login", login);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+router.post("/refresh-token", refreshToken);
+
+
+// Authenticated
+router.post(
+  "/logout",
+  authenticate,
+  logout
+);
+
+router.get(
+  "/me",
+  authenticate,
+  me
+);
+
 router.patch(
   "/me",
   authenticate,
@@ -43,4 +60,4 @@ router.patch(
   updateMyProfile
 );
 
-export default router
+export default router;
