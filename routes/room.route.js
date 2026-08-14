@@ -6,25 +6,113 @@ import {
   getRoomById,
   updateRoom,
   updateRoomStatus,
-  deleteRoom
+  deleteRoom,
+  getAvailableRooms,
+  getOccupiedRooms,
+  getReservedRooms
 } from "../controllers/room.controller.js";
-
 import { authenticate } from "../middleware/auth.middleware.js";
-import { authorizeRoles } from "../middleware/role.middleware.js";
+import {authorizeRoles} from "../middleware/role.middleware.js";
 import { Roles } from "../config/roles.config.js";
 
-const roomRouter = express.Router();
+const router = express.Router();
 
-roomRouter.post("/", authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),createRoom);
 
-roomRouter.get("/",authenticate,getAllRooms);
+// ROOM LIST
 
-roomRouter.get("/:id",authenticate,getRoomById);
+router.get(
+  "/",
+  authenticate,
+  getAllRooms
+);
 
-roomRouter.patch("/:id",authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),updateRoom);
 
-roomRouter.patch("/:id/status",authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),updateRoomStatus);
+// AVAILABLE
 
-roomRouter.delete("/:id",authenticate,authorizeRoles(Roles.CONDO_ADMIN,Roles.RESIDENT),deleteRoom);
+router.get(
+  "/available",
+  authenticate,
+  getAvailableRooms
+);
 
-export default roomRouter;
+
+// OCCUPIED
+
+router.get(
+  "/occupied",
+  authenticate,
+  getOccupiedRooms
+);
+
+
+// RESERVED
+
+router.get(
+  "/reserved",
+  authenticate,
+  getReservedRooms
+);
+
+
+// CREATE
+
+router.post(
+  "/",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  createRoom
+);
+
+
+// GET ONE
+
+router.get(
+  "/:id",
+  authenticate,
+  getRoomById
+);
+
+
+// UPDATE
+
+router.patch(
+  "/:id",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  updateRoom
+);
+
+
+// UPDATE STATUS
+
+router.patch(
+  "/:id/status",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  updateRoomStatus
+);
+
+
+// DELETE
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  deleteRoom
+);
+
+
+export default router;
