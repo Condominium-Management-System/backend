@@ -11,6 +11,8 @@ import userRoutes from "./routes/user.route.js"
 import equbRoutes from "./routes/equb.route.js"
 import iddirRoutes from "./routes/iddir.route.js"
 import iddirMemberRoutes from "./routes/iddirMember.route.js"
+import lostFoundRoutes from "./routes/lostFound.routes.js";
+
 const app = express()
 
 app.use(cors())
@@ -29,6 +31,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/equbs", equbRoutes);
 app.use("/api/iddirs", iddirRoutes);
 app.use("/api/iddir-members", iddirMemberRoutes);
+app.use("/api/lost-found", lostFoundRoutes);
+
 app.use(notFound)
 app.use(errorHandler)
 
