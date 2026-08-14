@@ -8,7 +8,19 @@ CREATE TYPE "RoomModel" AS ENUM ('studio', 'one_bedroom', 'two_bedroom', 'three_
 CREATE TYPE "RoomStatus" AS ENUM ('free', 'occupied', 'reserved');
 
 -- CreateEnum
-CREATE TYPE "EqubIddirStatus" AS ENUM ('pending', 'active', 'completed', 'cancelled');
+CREATE TYPE "EqubStatus" AS ENUM ('pending', 'active', 'completed', 'cancelled');
+
+-- CreateEnum
+CREATE TYPE "EqubMemberStatus" AS ENUM ('active', 'inactive', 'suspended', 'winner');
+
+-- CreateEnum
+CREATE TYPE "EqubPayoutStatus" AS ENUM ('pending', 'selected', 'processing', 'paid', 'failed');
+
+-- CreateEnum
+CREATE TYPE "IddirStatus" AS ENUM ('active', 'inactive');
+
+-- CreateEnum
+CREATE TYPE "IddirMemberStatus" AS ENUM ('active', 'inactive', 'suspended');
 
 -- CreateEnum
 CREATE TYPE "ActiveInactiveStatus" AS ENUM ('active', 'inactive');
@@ -20,10 +32,22 @@ CREATE TYPE "PaymentType" AS ENUM ('iddir', 'equb', 'guard_fee', 'service_charge
 CREATE TYPE "PaymentStatus" AS ENUM ('pending', 'approved', 'rejected');
 
 -- CreateEnum
-CREATE TYPE "PaymentMethod" AS ENUM ('cbe', 'telebirr', 'cash', 'bank_transfer');
+CREATE TYPE "PaymentMethod" AS ENUM ('cbe', 'telebirr', 'cash', 'bank_transfer', 'hx');
 
 -- CreateEnum
-CREATE TYPE "TransactionStatus" AS ENUM ('pending', 'completed', 'failed');
+CREATE TYPE "TransactionStatus" AS ENUM ('pending', 'completed', 'failed', 'reversed');
+
+-- CreateEnum
+CREATE TYPE "AccountType" AS ENUM ('bank', 'mobile_money', 'wallet');
+
+-- CreateEnum
+CREATE TYPE "AccountStatus" AS ENUM ('active', 'inactive', 'blocked');
+
+-- CreateEnum
+CREATE TYPE "PaymentGateway" AS ENUM ('hx');
+
+-- CreateEnum
+CREATE TYPE "ServiceFeeStatus" AS ENUM ('pending', 'collected', 'refunded');
 
 -- CreateEnum
 CREATE TYPE "AnnouncementType" AS ENUM ('general', 'shop_alert', 'emergency', 'event', 'mourning', 'celebration');
@@ -152,9 +176,8 @@ CREATE TABLE "equibs" (
     "condoId" TEXT NOT NULL,
     "createdById" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "noMembers" INTEGER NOT NULL,
-    "members" JSONB[],
-    "status" "EqubIddirStatus" NOT NULL DEFAULT 'pending',
+    "noMembers" INTEGER NOT NULL DEFAULT 0,
+    "status" "EqubStatus" NOT NULL DEFAULT 'pending',
     "startDate" TIMESTAMP(3) NOT NULL,
     "dueDate" TIMESTAMP(3) NOT NULL,
     "contributionAmount" DECIMAL(15,2) NOT NULL,
@@ -166,14 +189,50 @@ CREATE TABLE "equibs" (
 );
 
 -- CreateTable
+CREATE TABLE "equb_members" (
+    "id" TEXT NOT NULL,
+    "condoId" TEXT,
+    "equbId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "status" "EqubMemberStatus" NOT NULL DEFAULT 'active',
+    "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "leftAt" TIMESTAMP(3),
+    "totalPaid" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "hasReceivedPayout" BOOLEAN NOT NULL DEFAULT false,
+    "payoutCount" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "equb_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "equb_payouts" (
+    "id" TEXT NOT NULL,
+    "equbId" TEXT NOT NULL,
+    "winnerId" TEXT NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "amount" DECIMAL(15,2) NOT NULL,
+    "roundNumber" INTEGER NOT NULL,
+    "selectionReference" TEXT NOT NULL,
+    "status" "EqubPayoutStatus" NOT NULL DEFAULT 'pending',
+    "selectedAt" TIMESTAMP(3),
+    "paidAt" TIMESTAMP(3),
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "equb_payouts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "iddirs" (
     "id" TEXT NOT NULL,
     "condoId" TEXT NOT NULL,
     "createdById" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "noMembers" INTEGER NOT NULL,
-    "members" JSONB[],
-    "status" "ActiveInactiveStatus" NOT NULL DEFAULT 'active',
+    "noMembers" INTEGER NOT NULL DEFAULT 0,
+    "status" "IddirStatus" NOT NULL DEFAULT 'active',
     "startedDate" TIMESTAMP(3) NOT NULL,
     "contributionAmount" DECIMAL(15,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -184,13 +243,81 @@ CREATE TABLE "iddirs" (
 );
 
 -- CreateTable
+CREATE TABLE "iddir_members" (
+    "id" TEXT NOT NULL,
+    "iddirId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "status" "IddirMemberStatus" NOT NULL DEFAULT 'active',
+    "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "leftAt" TIMESTAMP(3),
+    "totalPaid" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "totalReceived" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "iddir_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_accounts" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "accountType" "AccountType" NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "accountName" TEXT NOT NULL,
+    "accountNumber" TEXT NOT NULL,
+    "providerName" TEXT,
+    "balance" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "status" "AccountStatus" NOT NULL DEFAULT 'active',
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "user_accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "condo_accounts" (
+    "id" TEXT NOT NULL,
+    "condoId" TEXT NOT NULL,
+    "accountType" "AccountType" NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "accountName" TEXT NOT NULL,
+    "accountNumber" TEXT NOT NULL,
+    "providerName" TEXT,
+    "balance" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "status" "AccountStatus" NOT NULL DEFAULT 'active',
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "condo_accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "hx_accounts" (
+    "id" TEXT NOT NULL,
+    "accountName" TEXT NOT NULL,
+    "accountNumber" TEXT NOT NULL,
+    "balance" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "serviceFeePercentage" DECIMAL(5,2) NOT NULL DEFAULT 1.00,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "hx_accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "payments" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "condoId" TEXT NOT NULL,
+    "equbId" TEXT,
+    "iddirId" TEXT,
     "paymentType" "PaymentType" NOT NULL,
     "amount" DECIMAL(15,2) NOT NULL,
-    "monthYear" TEXT NOT NULL,
+    "monthYear" TEXT,
     "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
     "paymentMethod" "PaymentMethod" NOT NULL,
     "transactionId" TEXT,
@@ -208,24 +335,49 @@ CREATE TABLE "payments" (
 -- CreateTable
 CREATE TABLE "transactions" (
     "id" TEXT NOT NULL,
-    "senderId" TEXT NOT NULL,
+    "senderId" TEXT,
+    "senderAccountId" TEXT,
+    "senderCondoAccountId" TEXT,
     "senderAccNo" TEXT NOT NULL,
     "senderName" TEXT NOT NULL,
-    "receiverId" TEXT NOT NULL,
-    "receiverName" TEXT NOT NULL,
+    "receiverId" TEXT,
+    "receiverAccountId" TEXT,
+    "receiverCondoAccountId" TEXT,
+    "hxAccountId" TEXT,
     "receiverAccNo" TEXT NOT NULL,
+    "receiverName" TEXT NOT NULL,
     "referenceNo" TEXT NOT NULL,
     "stamp" TEXT,
     "paymentType" "PaymentType",
     "amount" DECIMAL(15,2) NOT NULL,
     "monthYear" TEXT,
     "paymentMethod" "PaymentMethod",
+    "gateway" "PaymentGateway",
     "status" "TransactionStatus" NOT NULL DEFAULT 'pending',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    "condoId" TEXT,
+
+    CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "service_fees" (
+    "id" TEXT NOT NULL,
+    "transactionId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "condoId" TEXT NOT NULL,
+    "hxAccountId" TEXT NOT NULL,
+    "percentage" DECIMAL(5,2) NOT NULL,
+    "baseAmount" DECIMAL(15,2) NOT NULL,
+    "feeAmount" DECIMAL(15,2) NOT NULL,
+    "status" "ServiceFeeStatus" NOT NULL DEFAULT 'pending',
+    "collectedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "service_fees_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -395,6 +547,36 @@ CREATE INDEX "equibs_createdById_idx" ON "equibs"("createdById");
 CREATE INDEX "equibs_status_idx" ON "equibs"("status");
 
 -- CreateIndex
+CREATE INDEX "equb_members_equbId_idx" ON "equb_members"("equbId");
+
+-- CreateIndex
+CREATE INDEX "equb_members_userId_idx" ON "equb_members"("userId");
+
+-- CreateIndex
+CREATE INDEX "equb_members_status_idx" ON "equb_members"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "equb_members_equbId_userId_key" ON "equb_members"("equbId", "userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "equb_payouts_selectionReference_key" ON "equb_payouts"("selectionReference");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "equb_payouts_transactionId_key" ON "equb_payouts"("transactionId");
+
+-- CreateIndex
+CREATE INDEX "equb_payouts_equbId_idx" ON "equb_payouts"("equbId");
+
+-- CreateIndex
+CREATE INDEX "equb_payouts_winnerId_idx" ON "equb_payouts"("winnerId");
+
+-- CreateIndex
+CREATE INDEX "equb_payouts_status_idx" ON "equb_payouts"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "equb_payouts_equbId_roundNumber_key" ON "equb_payouts"("equbId", "roundNumber");
+
+-- CreateIndex
 CREATE INDEX "iddirs_condoId_idx" ON "iddirs"("condoId");
 
 -- CreateIndex
@@ -404,6 +586,45 @@ CREATE INDEX "iddirs_createdById_idx" ON "iddirs"("createdById");
 CREATE INDEX "iddirs_status_idx" ON "iddirs"("status");
 
 -- CreateIndex
+CREATE INDEX "iddir_members_iddirId_idx" ON "iddir_members"("iddirId");
+
+-- CreateIndex
+CREATE INDEX "iddir_members_userId_idx" ON "iddir_members"("userId");
+
+-- CreateIndex
+CREATE INDEX "iddir_members_status_idx" ON "iddir_members"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "iddir_members_iddirId_userId_key" ON "iddir_members"("iddirId", "userId");
+
+-- CreateIndex
+CREATE INDEX "user_accounts_userId_idx" ON "user_accounts"("userId");
+
+-- CreateIndex
+CREATE INDEX "user_accounts_paymentMethod_idx" ON "user_accounts"("paymentMethod");
+
+-- CreateIndex
+CREATE INDEX "user_accounts_status_idx" ON "user_accounts"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_accounts_userId_accountNumber_key" ON "user_accounts"("userId", "accountNumber");
+
+-- CreateIndex
+CREATE INDEX "condo_accounts_condoId_idx" ON "condo_accounts"("condoId");
+
+-- CreateIndex
+CREATE INDEX "condo_accounts_paymentMethod_idx" ON "condo_accounts"("paymentMethod");
+
+-- CreateIndex
+CREATE INDEX "condo_accounts_status_idx" ON "condo_accounts"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "condo_accounts_condoId_accountNumber_key" ON "condo_accounts"("condoId", "accountNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "hx_accounts_accountNumber_key" ON "hx_accounts"("accountNumber");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "payments_transactionId_key" ON "payments"("transactionId");
 
 -- CreateIndex
@@ -411,6 +632,12 @@ CREATE INDEX "payments_userId_idx" ON "payments"("userId");
 
 -- CreateIndex
 CREATE INDEX "payments_condoId_idx" ON "payments"("condoId");
+
+-- CreateIndex
+CREATE INDEX "payments_equbId_idx" ON "payments"("equbId");
+
+-- CreateIndex
+CREATE INDEX "payments_iddirId_idx" ON "payments"("iddirId");
 
 -- CreateIndex
 CREATE INDEX "payments_status_idx" ON "payments"("status");
@@ -431,6 +658,21 @@ CREATE INDEX "transactions_senderId_idx" ON "transactions"("senderId");
 CREATE INDEX "transactions_receiverId_idx" ON "transactions"("receiverId");
 
 -- CreateIndex
+CREATE INDEX "transactions_senderAccountId_idx" ON "transactions"("senderAccountId");
+
+-- CreateIndex
+CREATE INDEX "transactions_senderCondoAccountId_idx" ON "transactions"("senderCondoAccountId");
+
+-- CreateIndex
+CREATE INDEX "transactions_receiverAccountId_idx" ON "transactions"("receiverAccountId");
+
+-- CreateIndex
+CREATE INDEX "transactions_receiverCondoAccountId_idx" ON "transactions"("receiverCondoAccountId");
+
+-- CreateIndex
+CREATE INDEX "transactions_hxAccountId_idx" ON "transactions"("hxAccountId");
+
+-- CreateIndex
 CREATE INDEX "transactions_referenceNo_idx" ON "transactions"("referenceNo");
 
 -- CreateIndex
@@ -438,6 +680,21 @@ CREATE INDEX "transactions_status_idx" ON "transactions"("status");
 
 -- CreateIndex
 CREATE INDEX "transactions_deletedAt_idx" ON "transactions"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "service_fees_userId_idx" ON "service_fees"("userId");
+
+-- CreateIndex
+CREATE INDEX "service_fees_condoId_idx" ON "service_fees"("condoId");
+
+-- CreateIndex
+CREATE INDEX "service_fees_hxAccountId_idx" ON "service_fees"("hxAccountId");
+
+-- CreateIndex
+CREATE INDEX "service_fees_status_idx" ON "service_fees"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "service_fees_transactionId_key" ON "service_fees"("transactionId");
 
 -- CreateIndex
 CREATE INDEX "announcements_condoId_idx" ON "announcements"("condoId");
@@ -524,10 +781,10 @@ CREATE INDEX "promotions_deletedAt_idx" ON "promotions"("deletedAt");
 ALTER TABLE "users" ADD CONSTRAINT "users_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "users" ADD CONSTRAINT "users_addToEqubById_fkey" FOREIGN KEY ("addToEqubById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+ALTER TABLE "users" ADD CONSTRAINT "users_addToEqubById_fkey" FOREIGN KEY ("addToEqubById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "users" ADD CONSTRAINT "users_addToIddirById_fkey" FOREIGN KEY ("addToIddirById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+ALTER TABLE "users" ADD CONSTRAINT "users_addToIddirById_fkey" FOREIGN KEY ("addToIddirById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "blocks" ADD CONSTRAINT "blocks_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -548,16 +805,52 @@ ALTER TABLE "equibs" ADD CONSTRAINT "equibs_condoId_fkey" FOREIGN KEY ("condoId"
 ALTER TABLE "equibs" ADD CONSTRAINT "equibs_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "equb_members" ADD CONSTRAINT "equb_members_equbId_fkey" FOREIGN KEY ("equbId") REFERENCES "equibs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equb_members" ADD CONSTRAINT "equb_members_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equb_payouts" ADD CONSTRAINT "equb_payouts_equbId_fkey" FOREIGN KEY ("equbId") REFERENCES "equibs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equb_payouts" ADD CONSTRAINT "equb_payouts_winnerId_fkey" FOREIGN KEY ("winnerId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equb_payouts" ADD CONSTRAINT "equb_payouts_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "equb_payouts" ADD CONSTRAINT "equb_payouts_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "iddirs" ADD CONSTRAINT "iddirs_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "iddirs" ADD CONSTRAINT "iddirs_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "iddir_members" ADD CONSTRAINT "iddir_members_iddirId_fkey" FOREIGN KEY ("iddirId") REFERENCES "iddirs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "iddir_members" ADD CONSTRAINT "iddir_members_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_accounts" ADD CONSTRAINT "user_accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "condo_accounts" ADD CONSTRAINT "condo_accounts_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "payments" ADD CONSTRAINT "payments_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payments" ADD CONSTRAINT "payments_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_equbId_fkey" FOREIGN KEY ("equbId") REFERENCES "equibs"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_iddirId_fkey" FOREIGN KEY ("iddirId") REFERENCES "iddirs"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payments" ADD CONSTRAINT "payments_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -569,7 +862,37 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_approvedById_fkey" FOREIGN KEY (
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_senderAccountId_fkey" FOREIGN KEY ("senderAccountId") REFERENCES "user_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_senderCondoAccountId_fkey" FOREIGN KEY ("senderCondoAccountId") REFERENCES "condo_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_receiverAccountId_fkey" FOREIGN KEY ("receiverAccountId") REFERENCES "user_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_receiverCondoAccountId_fkey" FOREIGN KEY ("receiverCondoAccountId") REFERENCES "condo_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "hx_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "hx_accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "announcements" ADD CONSTRAINT "announcements_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
