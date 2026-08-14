@@ -4,13 +4,13 @@ import {
   createCondoService,
   getAllCondosService,
   getCondoByIdService,
+  getCondoByCodeService,
   updateCondoService,
+  toggleCondoStatusService,
   deleteCondoService
 } from "../services/condo.service.js";
 
-// ======================================================
 // CREATE
-// ======================================================
 
 export const createCondo = asyncHandler(async (req, res) => {
   const condo = await createCondoService(req.body);
@@ -22,9 +22,7 @@ export const createCondo = asyncHandler(async (req, res) => {
   });
 });
 
-// ======================================================
 // GET ALL
-// ======================================================
 
 export const getAllCondos = asyncHandler(async (req, res) => {
   const condos = await getAllCondosService();
@@ -35,14 +33,10 @@ export const getAllCondos = asyncHandler(async (req, res) => {
   });
 });
 
-// ======================================================
-// GET ONE
-// ======================================================
+// GET BY ID
 
 export const getCondoById = asyncHandler(async (req, res) => {
-  const condo = await getCondoByIdService(
-    req.params.id
-  );
+  const condo = await getCondoByIdService(req.params.id);
 
   res.status(200).json({
     success: true,
@@ -50,9 +44,18 @@ export const getCondoById = asyncHandler(async (req, res) => {
   });
 });
 
-// ======================================================
+// GET BY CODE
+
+export const getCondoByCode = asyncHandler(async (req, res) => {
+  const condo = await getCondoByCodeService(req.params.condoCode);
+
+  res.status(200).json({
+    success: true,
+    data: condo
+  });
+});
+
 // UPDATE
-// ======================================================
 
 export const updateCondo = asyncHandler(async (req, res) => {
   const condo = await updateCondoService(
@@ -67,14 +70,24 @@ export const updateCondo = asyncHandler(async (req, res) => {
   });
 });
 
-// ======================================================
+// TOGGLE STATUS
+
+export const toggleCondoStatus = asyncHandler(async (req, res) => {
+  const condo = await toggleCondoStatusService(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: `Condominium ${
+      condo.activeStatus ? "activated" : "deactivated"
+    } successfully`,
+    data: condo
+  });
+});
+
 // DELETE
-// ======================================================
 
 export const deleteCondo = asyncHandler(async (req, res) => {
-  const result = await deleteCondoService(
-    req.params.id
-  );
+  const result = await deleteCondoService(req.params.id);
 
   res.status(200).json({
     success: true,
@@ -82,4 +95,3 @@ export const deleteCondo = asyncHandler(async (req, res) => {
     data: result
   });
 });
-
