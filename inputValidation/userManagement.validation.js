@@ -40,7 +40,7 @@ export const updateUserByAdminValidation = Joi.object({
     "guard",
     "super_admin"
   ),
-
+  dueDate: Joi.date().iso().optional(),
   condoId: Joi.string(),
 
   block: Joi.string().allow(null, ""),
