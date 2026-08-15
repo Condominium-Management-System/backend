@@ -23,9 +23,16 @@ const publicUserSelect = {
   condoId: true,
   condoCode: true,
   block: true,
+  fan:true,
+  addToEqubById:true,
+  addToIddirById:true,
+  isGetEqub:true,
+  isInEqub:true,
+  isInIddir:true,
   roomNo: true,
   isVerified: true,
   registerDate: true,
+  dueDate:true,
   createdAt: true,
   updatedAt: true
 };
@@ -484,6 +491,10 @@ export const updateUserByAdminService = async (
 
   if (value.block !== undefined) {
     data.block = value.block;
+  }
+  //due date
+   if (value.dueDate !== undefined) {
+    data.dueDate = value.dueDate;
   }
 
 
