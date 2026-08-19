@@ -7,7 +7,8 @@ import {
   getCondoByCodeService,
   updateCondoService,
   toggleCondoStatusService,
-  deleteCondoService
+  deleteCondoService,
+  searchCondosService,
 } from "../services/condo.service.js";
 
 // CREATE
@@ -22,6 +23,24 @@ export const createCondo = asyncHandler(async (req, res) => {
   });
 });
 
+
+
+export const searchCondos = async (req, res, next) => {
+  try {
+    const { search } = req.query;
+
+    const condos =
+      await searchCondosService(search);
+
+    res.status(200).json({
+      success: true,
+      data: condos
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
 // GET ALL
 
 export const getAllCondos = asyncHandler(async (req, res) => {
