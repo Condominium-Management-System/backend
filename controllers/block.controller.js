@@ -2,6 +2,9 @@ import asyncHandler from "../utils/asyncHandler.js";
 
 import {
   createBlockService,
+  searchBlocksService,
+  getPublicBlocksByCondoService,
+  getPublicBlockByIdService,
   getAllBlocksService,
   getBlockByIdService,
   getBlockStatisticsService,
@@ -10,120 +13,285 @@ import {
 } from "../services/block.service.js";
 
 
-// CREATE
+// PUBLIC SEARCH
+//
+// GET /api/blocks/search
 
-export const createBlock = asyncHandler(
-  async (req, res) => {
+export const searchBlocks =
+  asyncHandler(async (req, res) => {
 
-    const block =
-      await createBlockService(
-        req.body,
-        req.user
+    const {
+      search,
+      condoId
+    } = req.query;
+
+
+    const blocks =
+      await searchBlocksService(
+        search,
+        {
+          condoId
+        }
       );
 
-    res.status(201).json({
+
+    res.status(200).json({
+
       success: true,
-      message: "Block created successfully",
-      data: block
+
+      count:
+        blocks.length,
+
+      data:
+        blocks
+
     });
-  }
-);
+
+  });
 
 
-// GET ALL
+// PUBLIC BLOCKS BY CONDO
+//
+// GET /api/condos/:condoId/blocks
 
-export const getAllBlocks = asyncHandler(
-  async (req, res) => {
+export const getPublicBlocksByCondo =
+  asyncHandler(async (req, res) => {
+
+    const {
+      condoId
+    } = req.params;
+
+
+    const result =
+      await getPublicBlocksByCondoService(
+
+        condoId,
+
+        {
+          blockNo:
+            req.query.blockNo
+        }
+
+      );
+
+
+    res.status(200).json({
+
+      success: true,
+
+      data:
+        result
+
+    });
+
+  });
+
+
+// PUBLIC SINGLE BLOCK
+//
+// GET /api/condos/:condoId/blocks/:blockId
+
+export const getPublicBlockById =
+  asyncHandler(async (req, res) => {
+
+    const {
+      condoId,
+      blockId
+    } = req.params;
+
+
+    const block =
+      await getPublicBlockByIdService(
+        condoId,
+        blockId
+      );
+
+
+    res.status(200).json({
+
+      success: true,
+
+      data:
+        block
+
+    });
+
+  });
+
+
+// ADMIN GET ALL
+//
+// GET /api/blocks
+
+export const getAllBlocks =
+  asyncHandler(async (req, res) => {
 
     const blocks =
       await getAllBlocksService({
-        condoId: req.query.condoId,
-        requester: req.user
+
+        condoId:
+          req.query.condoId,
+
+        requester:
+          req.user
+
       });
 
+
     res.status(200).json({
+
       success: true,
-      data: blocks
+
+      count:
+        blocks.length,
+
+      data:
+        blocks
+
     });
-  }
-);
+
+  });
 
 
-// GET ONE
+// ADMIN GET ONE
+//
+// GET /api/blocks/:id
 
-export const getBlockById = asyncHandler(
+export const getBlockById = asyncHandler(async (req, res) => {
+  const { condoId, blockId } = req.params;
+
+  const block = await getBlockByIdService(
+    condoId,
+    blockId,
+    req.user
+  );
+
+  res.status(200).json({
+    success: true,
+    data: block
+  });
+});
+
+
+// ADMIN STATISTICS
+//
+// GET /api/blocks/:id/statistics
+
+export const getBlockStatistics = asyncHandler(
   async (req, res) => {
+    const {
+      condoId,
+      blockId
+    } = req.params;
 
-    const block =
-      await getBlockByIdService(
-        req.params.id,
+    const statistics =
+      await getBlockStatisticsService(
+        condoId,
+        blockId,
         req.user
       );
 
     res.status(200).json({
       success: true,
-      data: block
+      data: statistics
     });
   }
 );
 
 
-// GET STATISTICS
+// CREATE
+//
+// POST /api/blocks
 
-export const getBlockStatistics =
-  asyncHandler(
-    async (req, res) => {
+export const createBlock =
+  asyncHandler(async (req, res) => {
 
-      const statistics =
-        await getBlockStatisticsService(
-          req.params.id,
-          req.user
-        );
+    const block =
+      await createBlockService(
 
-      res.status(200).json({
-        success: true,
-        data: statistics
-      });
-    }
-  );
+        req.body,
+
+        req.user
+
+      );
+
+
+    res.status(201).json({
+
+      success: true,
+
+      message:
+        "Block created successfully",
+
+      data:
+        block
+
+    });
+
+  });
 
 
 // UPDATE
+//
+// PATCH /api/blocks/:id
 
-export const updateBlock = asyncHandler(
-  async (req, res) => {
+export const updateBlock =
+  asyncHandler(async (req, res) => {
 
     const block =
       await updateBlockService(
+
         req.params.id,
+
         req.body,
+
         req.user
+
       );
 
+
     res.status(200).json({
+
       success: true,
-      message: "Block updated successfully",
-      data: block
+
+      message:
+        "Block updated successfully",
+
+      data:
+        block
+
     });
-  }
-);
+
+  });
 
 
 // DELETE
+//
+// DELETE /api/blocks/:id
 
-export const deleteBlock = asyncHandler(
-  async (req, res) => {
+export const deleteBlock =
+  asyncHandler(async (req, res) => {
 
     const result =
       await deleteBlockService(
+
         req.params.id,
+
         req.user
+
       );
 
+
     res.status(200).json({
+
       success: true,
-      message: "Block deleted successfully",
-      data: result
+
+      message:
+        "Block deleted successfully",
+
+      data:
+        result
+
     });
-  }
-);
+
+  });
