@@ -32,7 +32,7 @@ CREATE TYPE "PaymentType" AS ENUM ('iddir', 'equb', 'guard_fee', 'service_charge
 CREATE TYPE "PaymentStatus" AS ENUM ('pending', 'approved', 'rejected');
 
 -- CreateEnum
-CREATE TYPE "PaymentMethod" AS ENUM ('cbe', 'telebirr', 'cash', 'bank_transfer', 'hx');
+CREATE TYPE "PaymentMethod" AS ENUM ('cbe', 'telebirr', 'cash', 'bank_transfer', 'others');
 
 -- CreateEnum
 CREATE TYPE "TransactionStatus" AS ENUM ('pending', 'completed', 'failed', 'reversed');
@@ -77,7 +77,10 @@ CREATE TYPE "LostFoundStatus" AS ENUM ('open', 'matched', 'claimed', 'archived')
 CREATE TYPE "ChatType" AS ENUM ('message', 'photo', 'file');
 
 -- CreateEnum
-CREATE TYPE "PromoType" AS ENUM ('shop', 'technical', 'other');
+CREATE TYPE "PromoStatus" AS ENUM ('pending', 'approved', 'active', 'expired', 'rejected', 'cancelled');
+
+-- CreateEnum
+CREATE TYPE "PromoType" AS ENUM ('shop', 'technical', 'service', 'product', 'event', 'other');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -295,17 +298,17 @@ CREATE TABLE "condo_accounts" (
 );
 
 -- CreateTable
-CREATE TABLE "hx_accounts" (
+CREATE TABLE "HXAccount" (
     "id" TEXT NOT NULL,
     "accountName" TEXT NOT NULL,
     "accountNumber" TEXT NOT NULL,
     "balance" DECIMAL(15,2) NOT NULL DEFAULT 0,
-    "serviceFeePercentage" DECIMAL(5,2) NOT NULL DEFAULT 1.00,
+    "serviceFeePercentage" DECIMAL(5,2) NOT NULL DEFAULT 0.34,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "hx_accounts_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "HXAccount_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -317,17 +320,19 @@ CREATE TABLE "payments" (
     "iddirId" TEXT,
     "paymentType" "PaymentType" NOT NULL,
     "amount" DECIMAL(15,2) NOT NULL,
+    "serviceFee" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "totalAmount" DECIMAL(15,2) NOT NULL,
     "monthYear" TEXT,
-    "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
     "paymentMethod" "PaymentMethod" NOT NULL,
+    "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
     "transactionId" TEXT,
+    "receiptUrl" TEXT,
     "paymentDate" TIMESTAMP(3),
-    "adminNotes" TEXT,
-    "approvedById" TEXT,
     "approvalDate" TIMESTAMP(3),
+    "approvedById" TEXT,
+    "adminNotes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
 );
@@ -338,26 +343,26 @@ CREATE TABLE "transactions" (
     "senderId" TEXT,
     "senderAccountId" TEXT,
     "senderCondoAccountId" TEXT,
-    "senderAccNo" TEXT NOT NULL,
-    "senderName" TEXT NOT NULL,
+    "senderAccNo" TEXT,
+    "senderName" TEXT,
     "receiverId" TEXT,
     "receiverAccountId" TEXT,
     "receiverCondoAccountId" TEXT,
     "hxAccountId" TEXT,
-    "receiverAccNo" TEXT NOT NULL,
-    "receiverName" TEXT NOT NULL,
+    "receiverAccNo" TEXT,
+    "receiverName" TEXT,
     "referenceNo" TEXT NOT NULL,
     "stamp" TEXT,
     "paymentType" "PaymentType",
     "amount" DECIMAL(15,2) NOT NULL,
     "monthYear" TEXT,
     "paymentMethod" "PaymentMethod",
-    "gateway" "PaymentGateway",
+    "gateway" "PaymentGateway" NOT NULL DEFAULT 'hx',
     "status" "TransactionStatus" NOT NULL DEFAULT 'pending',
+    "condoId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
-    "condoId" TEXT,
 
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
 );
@@ -465,22 +470,49 @@ CREATE TABLE "chat_messages" (
 -- CreateTable
 CREATE TABLE "promotions" (
     "id" TEXT NOT NULL,
-    "condoId" TEXT NOT NULL,
-    "type" "PromoType" NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
+    "type" "PromoType" NOT NULL,
+    "category" TEXT,
     "price" DECIMAL(15,2) NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'ETB',
+    "status" "PromoStatus" NOT NULL DEFAULT 'pending',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "reviewedById" TEXT,
+    "reviewedAt" TIMESTAMP(3),
+    "rejectionReason" TEXT,
+    "businessName" TEXT NOT NULL DEFAULT 'Unknown Business',
+    "contactPerson" TEXT,
+    "contactNumber" TEXT NOT NULL,
+    "email" TEXT,
+    "websiteUrl" TEXT,
+    "imageUrl" TEXT,
+    "additionalImages" TEXT[],
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "publishedAt" TIMESTAMP(3),
+    "condoId" TEXT,
     "postedById" TEXT NOT NULL,
     "postedByRole" "CreatorRole",
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "imageUrl" TEXT,
-    "contactNumber" TEXT,
+    "views" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "promotions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "report_responses" (
+    "id" TEXT NOT NULL,
+    "reportId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "isAdminResponse" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "report_responses_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -622,7 +654,7 @@ CREATE INDEX "condo_accounts_status_idx" ON "condo_accounts"("status");
 CREATE UNIQUE INDEX "condo_accounts_condoId_accountNumber_key" ON "condo_accounts"("condoId", "accountNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "hx_accounts_accountNumber_key" ON "hx_accounts"("accountNumber");
+CREATE UNIQUE INDEX "HXAccount_accountNumber_key" ON "HXAccount"("accountNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "payments_transactionId_key" ON "payments"("transactionId");
@@ -640,13 +672,16 @@ CREATE INDEX "payments_equbId_idx" ON "payments"("equbId");
 CREATE INDEX "payments_iddirId_idx" ON "payments"("iddirId");
 
 -- CreateIndex
+CREATE INDEX "payments_paymentType_idx" ON "payments"("paymentType");
+
+-- CreateIndex
+CREATE INDEX "payments_paymentMethod_idx" ON "payments"("paymentMethod");
+
+-- CreateIndex
 CREATE INDEX "payments_status_idx" ON "payments"("status");
 
 -- CreateIndex
 CREATE INDEX "payments_monthYear_idx" ON "payments"("monthYear");
-
--- CreateIndex
-CREATE INDEX "payments_deletedAt_idx" ON "payments"("deletedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "transactions_referenceNo_key" ON "transactions"("referenceNo");
@@ -670,7 +705,7 @@ CREATE INDEX "transactions_receiverAccountId_idx" ON "transactions"("receiverAcc
 CREATE INDEX "transactions_receiverCondoAccountId_idx" ON "transactions"("receiverCondoAccountId");
 
 -- CreateIndex
-CREATE INDEX "transactions_hxAccountId_idx" ON "transactions"("hxAccountId");
+CREATE INDEX "transactions_condoId_idx" ON "transactions"("condoId");
 
 -- CreateIndex
 CREATE INDEX "transactions_referenceNo_idx" ON "transactions"("referenceNo");
@@ -679,7 +714,13 @@ CREATE INDEX "transactions_referenceNo_idx" ON "transactions"("referenceNo");
 CREATE INDEX "transactions_status_idx" ON "transactions"("status");
 
 -- CreateIndex
-CREATE INDEX "transactions_deletedAt_idx" ON "transactions"("deletedAt");
+CREATE INDEX "transactions_paymentMethod_idx" ON "transactions"("paymentMethod");
+
+-- CreateIndex
+CREATE INDEX "transactions_paymentType_idx" ON "transactions"("paymentType");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "service_fees_transactionId_key" ON "service_fees"("transactionId");
 
 -- CreateIndex
 CREATE INDEX "service_fees_userId_idx" ON "service_fees"("userId");
@@ -692,9 +733,6 @@ CREATE INDEX "service_fees_hxAccountId_idx" ON "service_fees"("hxAccountId");
 
 -- CreateIndex
 CREATE INDEX "service_fees_status_idx" ON "service_fees"("status");
-
--- CreateIndex
-CREATE UNIQUE INDEX "service_fees_transactionId_key" ON "service_fees"("transactionId");
 
 -- CreateIndex
 CREATE INDEX "announcements_condoId_idx" ON "announcements"("condoId");
@@ -760,13 +798,7 @@ CREATE INDEX "chat_messages_isRead_idx" ON "chat_messages"("isRead");
 CREATE INDEX "chat_messages_deletedAt_idx" ON "chat_messages"("deletedAt");
 
 -- CreateIndex
-CREATE INDEX "promotions_condoId_idx" ON "promotions"("condoId");
-
--- CreateIndex
-CREATE INDEX "promotions_postedById_idx" ON "promotions"("postedById");
-
--- CreateIndex
-CREATE INDEX "promotions_type_idx" ON "promotions"("type");
+CREATE INDEX "promotions_status_idx" ON "promotions"("status");
 
 -- CreateIndex
 CREATE INDEX "promotions_isActive_idx" ON "promotions"("isActive");
@@ -775,7 +807,22 @@ CREATE INDEX "promotions_isActive_idx" ON "promotions"("isActive");
 CREATE INDEX "promotions_expiresAt_idx" ON "promotions"("expiresAt");
 
 -- CreateIndex
+CREATE INDEX "promotions_type_idx" ON "promotions"("type");
+
+-- CreateIndex
+CREATE INDEX "promotions_condoId_idx" ON "promotions"("condoId");
+
+-- CreateIndex
+CREATE INDEX "promotions_postedById_idx" ON "promotions"("postedById");
+
+-- CreateIndex
 CREATE INDEX "promotions_deletedAt_idx" ON "promotions"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "report_responses_reportId_idx" ON "report_responses"("reportId");
+
+-- CreateIndex
+CREATE INDEX "report_responses_userId_idx" ON "report_responses"("userId");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -877,7 +924,7 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_receiverAccountId_fkey" 
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_receiverCondoAccountId_fkey" FOREIGN KEY ("receiverCondoAccountId") REFERENCES "condo_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "hx_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "HXAccount"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -892,7 +939,7 @@ ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_userId_fkey" FOREIGN KEY
 ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "hx_accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "service_fees" ADD CONSTRAINT "service_fees_hxAccountId_fkey" FOREIGN KEY ("hxAccountId") REFERENCES "HXAccount"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "announcements" ADD CONSTRAINT "announcements_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -931,7 +978,16 @@ ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_senderId_fkey" FOREIGN
 ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "promotions" ADD CONSTRAINT "promotions_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "promotions" ADD CONSTRAINT "promotions_reviewedById_fkey" FOREIGN KEY ("reviewedById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "promotions" ADD CONSTRAINT "promotions_condoId_fkey" FOREIGN KEY ("condoId") REFERENCES "condos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "promotions" ADD CONSTRAINT "promotions_postedById_fkey" FOREIGN KEY ("postedById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "report_responses" ADD CONSTRAINT "report_responses_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "reports"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "report_responses" ADD CONSTRAINT "report_responses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -3,10 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 
-import authRouter from "./routes/auth.router.js";
 import { errorHandler, notFound } from "./middleware/error.middleware.js";
 
-import authRouter from "./routes/auth.route.js"
+import authRoutes from "./routes/auth.route.js"
 import condoRoutes from "./routes/condo.route.js";
 import blockRouter from "./routes/block.route.js";
 import roomRoutes from "./routes/room.route.js";
@@ -15,7 +14,6 @@ import userRoutes from "./routes/user.route.js";
 import equbRoutes from "./routes/equb.route.js";
 import iddirRoutes from "./routes/iddir.route.js";
 import iddirMemberRoutes from "./routes/iddirMember.route.js";
-import lostFoundRoutes from "./routes/lostFound.routes.js";
 import paymentRoutes from "./routes/payment.route.js";
 import transactionRoutes from "./routes/transaction.route.js";
 import userAccountRoutes from "./routes/userAccount.route.js";
@@ -89,9 +87,9 @@ app.get("/", (_req, res) => {
 app.use(
   "/api/auth",
   authRateLimiter,
-  authRouter
+  authRoutes
 );
-app.use("/api/auth", authRouter)
+app.use("/api/auth", authRoutes);
 app.use("/api/condos", condoRoutes);
 app.use("/api/blocks", blockRouter);
 app.use("/api/rooms", roomRoutes);

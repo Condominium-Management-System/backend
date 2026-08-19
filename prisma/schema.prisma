@@ -84,7 +84,7 @@ enum PaymentMethod {
   telebirr
   cash
   bank_transfer
-  hx
+  others
 }
 
 enum TransactionStatus {
@@ -183,70 +183,84 @@ enum ChatType {
   file
 }
 
+enum PromoStatus {
+  pending
+  approved
+  active
+  expired
+  rejected
+  cancelled
+}
+
 enum PromoType {
   shop
   technical
+  service
+  product
+  event
   other
 }
 
 model User {
-  id                   String         @id @default(uuid())
+  id                   String           @id @default(uuid())
   fullName             String
-  email                String         @unique
-  phoneNumber          String         @unique
+  email                String           @unique
+  phoneNumber          String           @unique
   password             String
-  role                 Role           @default(resident)
+  role                 Role             @default(resident)
   condoId              String?
   condoCode            String?
-  condo                Condo?         @relation(fields: [condoId], references: [id], onDelete: SetNull)
+  condo                Condo?           @relation(fields: [condoId], references: [id], onDelete: SetNull)
   block                String?
   roomNo               String?
-  isVerified           Boolean        @default(false)
+  isVerified           Boolean          @default(false)
   profilePhoto         String?
-  fan                  String         @unique @db.VarChar(16)
-  revenue              Decimal?       @db.Decimal(15, 2)
+  fan                  String           @unique @db.VarChar(16)
+  revenue              Decimal?         @db.Decimal(15, 2)
   frontId              String?
   backId               String?
-  isInIddir            Boolean        @default(false)
-  isInEqub             Boolean        @default(false)
-  isGetEqub            Boolean        @default(false)
-  refreshToken         String?        @unique
-  resetPasswordToken   String?        @unique
+  isInIddir            Boolean          @default(false)
+  isInEqub             Boolean          @default(false)
+  isGetEqub            Boolean          @default(false)
+  refreshToken         String?          @unique
+  resetPasswordToken   String?          @unique
   resetPasswordExpires DateTime?
-  emailVerifyToken     String?        @unique
+  emailVerifyToken     String?          @unique
   emailVerifyExpires   DateTime?
-  registerDate         DateTime       @default(now())
+  registerDate         DateTime         @default(now())
   dueDate              DateTime?
   addToEqubById        String?
-  addToEqubBy          User?          @relation("UserAddToEqub", fields: [addToEqubById], references: [id], onDelete: SetNull)
-  addedEqubUsers       User[]         @relation("UserAddToEqub")
+  addToEqubBy          User?            @relation("UserAddToEqub", fields: [addToEqubById], references: [id], onDelete: SetNull)
+  addedEqubUsers       User[]           @relation("UserAddToEqub")
   addToIddirById       String?
-  addToIddirBy         User?          @relation("UserAddToIddir", fields: [addToIddirById], references: [id], onDelete: SetNull)
-  addedIddirUsers      User[]         @relation("UserAddToIddir")
+  addToIddirBy         User?            @relation("UserAddToIddir", fields: [addToIddirById], references: [id], onDelete: SetNull)
+  addedIddirUsers      User[]           @relation("UserAddToIddir")
   bankAccounts         UserAccount[]
   equbMemberships      EqubMember[]
   iddirMemberships     IddirMember[]
   equbPayouts          EqubPayout[]
-  paymentsMade         Payment[]      @relation("PaymentUser")
-  paymentsApproved     Payment[]      @relation("PaymentApprover")
-  sentTransactions     Transaction[]  @relation("SenderTransaction")
-  receivedTransactions Transaction[]  @relation("ReceiverTransaction")
+  paymentsMade         Payment[]        @relation("PaymentUser")
+  paymentsApproved     Payment[]        @relation("PaymentApprover")
+  sentTransactions     Transaction[]    @relation("SenderTransaction")
+  receivedTransactions Transaction[]    @relation("ReceiverTransaction")
   serviceFees          ServiceFee[]
-  announcements        Announcement[] @relation("AnnouncementCreator")
-  reportsReported      Report[]       @relation("ReportReporter")
-  reportsAssigned      Report[]       @relation("ReportAssignee")
-  lostFoundReported    LostFound[]    @relation("LostFoundUser")
-  lostFoundClaimed     LostFound[]    @relation("LostFoundClaimant")
-  lostFoundVerified    LostFound[]    @relation("LostFoundVerifier")
-  sentMessages         ChatMessage[]  @relation("ChatSender")
-  receivedMessages     ChatMessage[]  @relation("ChatReceiver")
-  promotionsPosted     Promotion[]    @relation("PromotionPoster")
-  createdEqubs         Equb[]         @relation("EqubCreator")
-  createdIddirs        Iddir[]        @relation("IddirCreator")
-  createdPayouts       EqubPayout[]   @relation("PayoutCreator")
-  rooms                Room[]         @relation("RoomOccupant")
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  announcements        Announcement[]   @relation("AnnouncementCreator")
+  reportsReported      Report[]         @relation("ReportReporter")
+  reportsAssigned      Report[]         @relation("ReportAssignee")
+  lostFoundReported    LostFound[]      @relation("LostFoundUser")
+  lostFoundClaimed     LostFound[]      @relation("LostFoundClaimant")
+  lostFoundVerified    LostFound[]      @relation("LostFoundVerifier")
+  sentMessages         ChatMessage[]    @relation("ChatSender")
+  receivedMessages     ChatMessage[]    @relation("ChatReceiver")
+  promotionsPosted     Promotion[]      @relation("PromotionPoster")
+  promotionsReviewed   Promotion[]      @relation("PromotionReviewer")
+  reportResponses      ReportResponse[]
+  createdEqubs         Equb[]           @relation("EqubCreator")
+  createdIddirs        Iddir[]          @relation("IddirCreator")
+  createdPayouts       EqubPayout[]     @relation("PayoutCreator")
+  rooms                Room[]           @relation("RoomOccupant")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?
 
   @@index([condoId])
@@ -500,92 +514,123 @@ model CondoAccount {
 }
 
 model HXAccount {
-  id                   String        @id @default(uuid())
+  id                   String   @id @default(uuid())
   accountName          String
-  accountNumber        String        @unique
-  balance              Decimal       @default(0) @db.Decimal(15, 2)
-  serviceFeePercentage Decimal       @default(1.00) @db.Decimal(5, 2)
-  isActive             Boolean       @default(true)
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  transactions         Transaction[]
-  serviceFees          ServiceFee[]
+  accountNumber        String   @unique
+  balance              Decimal  @default(0) @db.Decimal(15, 2)
+  serviceFeePercentage Decimal  @default(0.34) @db.Decimal(5, 2)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  @@map("hx_accounts")
+  transactions Transaction[]
+  serviceFees  ServiceFee[]
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  userId        String
-  user          User          @relation("PaymentUser", fields: [userId], references: [id], onDelete: Cascade)
-  condoId       String
-  condo         Condo         @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  equbId        String?
-  equb          Equb?         @relation(fields: [equbId], references: [id], onDelete: SetNull)
-  iddirId       String?
-  iddir         Iddir?        @relation(fields: [iddirId], references: [id], onDelete: SetNull)
-  paymentType   PaymentType
-  amount        Decimal       @db.Decimal(15, 2)
-  monthYear     String?
-  status        PaymentStatus @default(pending)
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation("PaymentUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  condoId String
+  condo   Condo  @relation(fields: [condoId], references: [id], onDelete: Cascade)
+
+  equbId String?
+  equb   Equb?   @relation(fields: [equbId], references: [id], onDelete: SetNull)
+
+  iddirId String?
+  iddir   Iddir?  @relation(fields: [iddirId], references: [id], onDelete: SetNull)
+
+  paymentType PaymentType
+  amount      Decimal     @db.Decimal(15, 2)
+  serviceFee  Decimal     @default(0) @db.Decimal(15, 2)
+  totalAmount Decimal     @db.Decimal(15, 2)
+
+  monthYear String?
+
   paymentMethod PaymentMethod
-  transactionId String?       @unique
-  transaction   Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  paymentDate   DateTime?
-  adminNotes    String?
-  approvedById  String?
-  approvedBy    User?         @relation("PaymentApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvalDate  DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  deletedAt     DateTime?
+  status        PaymentStatus @default(pending)
+
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  receiptUrl String?
+
+  paymentDate DateTime?
+
+  approvalDate DateTime?
+
+  approvedById String?
+  approvedBy   User?   @relation("PaymentApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  adminNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([condoId])
   @@index([equbId])
   @@index([iddirId])
+  @@index([paymentType])
+  @@index([paymentMethod])
   @@index([status])
   @@index([monthYear])
-  @@index([deletedAt])
   @@map("payments")
 }
 
 model Transaction {
-  id                     String            @id @default(uuid())
-  senderId               String?
-  sender                 User?             @relation("SenderTransaction", fields: [senderId], references: [id], onDelete: Restrict)
-  senderAccountId        String?
-  senderAccount          UserAccount?      @relation("SenderAccount", fields: [senderAccountId], references: [id], onDelete: SetNull)
-  senderCondoAccountId   String?
-  senderCondoAccount     CondoAccount?     @relation("CondoSenderAccount", fields: [senderCondoAccountId], references: [id], onDelete: SetNull)
-  senderAccNo            String
-  senderName             String
-  receiverId             String?
-  receiver               User?             @relation("ReceiverTransaction", fields: [receiverId], references: [id], onDelete: Restrict)
-  receiverAccountId      String?
-  receiverAccount        UserAccount?      @relation("ReceiverAccount", fields: [receiverAccountId], references: [id], onDelete: SetNull)
+  id String @id @default(uuid())
+
+  senderId String?
+  sender   User?   @relation("SenderTransaction", fields: [senderId], references: [id], onDelete: Restrict)
+
+  senderAccountId String?
+  senderAccount   UserAccount? @relation("SenderAccount", fields: [senderAccountId], references: [id], onDelete: SetNull)
+
+  senderCondoAccountId String?
+  senderCondoAccount   CondoAccount? @relation("CondoSenderAccount", fields: [senderCondoAccountId], references: [id], onDelete: SetNull)
+
+  senderAccNo String?
+  senderName  String?
+
+  receiverId String?
+  receiver   User?   @relation("ReceiverTransaction", fields: [receiverId], references: [id], onDelete: Restrict)
+
+  receiverAccountId String?
+  receiverAccount   UserAccount? @relation("ReceiverAccount", fields: [receiverAccountId], references: [id], onDelete: SetNull)
+
   receiverCondoAccountId String?
-  receiverCondoAccount   CondoAccount?     @relation("CondoReceiverAccount", fields: [receiverCondoAccountId], references: [id], onDelete: SetNull)
-  hxAccountId            String?
-  hxAccount              HXAccount?        @relation(fields: [hxAccountId], references: [id], onDelete: SetNull)
-  receiverAccNo          String
-  receiverName           String
-  referenceNo            String            @unique
-  stamp                  String?
-  payment                Payment?
-  equbPayout             EqubPayout?
-  paymentType            PaymentType?
-  amount                 Decimal           @db.Decimal(15, 2)
-  monthYear              String?
-  paymentMethod          PaymentMethod?
-  gateway                PaymentGateway?
-  status                 TransactionStatus @default(pending)
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  deletedAt              DateTime?
-  condo                  Condo?            @relation(fields: [condoId], references: [id])
-  condoId                String?
-  serviceFee             ServiceFee?
+  receiverCondoAccount   CondoAccount? @relation("CondoReceiverAccount", fields: [receiverCondoAccountId], references: [id], onDelete: SetNull)
+
+  hxAccountId   String?
+  hxAccount     HXAccount? @relation(fields: [hxAccountId], references: [id])
+  receiverAccNo String?
+  receiverName  String?
+
+  referenceNo String  @unique
+  stamp       String?
+
+  paymentType PaymentType?
+  amount      Decimal      @db.Decimal(15, 2)
+  monthYear   String?
+
+  paymentMethod PaymentMethod?
+  gateway       PaymentGateway @default(hx)
+
+  status TransactionStatus @default(pending)
+
+  condoId String?
+  condo   Condo?  @relation(fields: [condoId], references: [id], onDelete: SetNull)
+
+  payment    Payment?
+  equbPayout EqubPayout?
+  serviceFee ServiceFee?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([senderId])
   @@index([receiverId])
@@ -593,32 +638,38 @@ model Transaction {
   @@index([senderCondoAccountId])
   @@index([receiverAccountId])
   @@index([receiverCondoAccountId])
-  @@index([hxAccountId])
+  @@index([condoId])
   @@index([referenceNo])
   @@index([status])
-  @@index([deletedAt])
+  @@index([paymentMethod])
+  @@index([paymentType])
   @@map("transactions")
 }
 
 model ServiceFee {
-  id            String           @id @default(uuid())
-  transactionId String
-  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  condoId       String
-  condo         Condo            @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  hxAccountId   String
-  hxAccount     HXAccount        @relation(fields: [hxAccountId], references: [id], onDelete: Restrict)
-  percentage    Decimal          @db.Decimal(5, 2)
-  baseAmount    Decimal          @db.Decimal(15, 2)
-  feeAmount     Decimal          @db.Decimal(15, 2)
-  status        ServiceFeeStatus @default(pending)
-  collectedAt   DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id            String      @id @default(uuid())
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
-  @@unique([transactionId])
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  condoId String
+  condo   Condo  @relation(fields: [condoId], references: [id], onDelete: Cascade)
+
+  hxAccountId String
+  hxAccount   HXAccount @relation(fields: [hxAccountId], references: [id])
+  percentage  Decimal   @db.Decimal(5, 2)
+  baseAmount  Decimal   @db.Decimal(15, 2)
+  feeAmount   Decimal   @db.Decimal(15, 2)
+
+  status ServiceFeeStatus @default(pending)
+
+  collectedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@index([condoId])
   @@index([hxAccountId])
@@ -627,22 +678,35 @@ model ServiceFee {
 }
 
 model Announcement {
-  id               String           @id @default(uuid())
-  condoId          String
-  condo            Condo            @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  title            String
-  body             String           @db.Text
+  id String @id @default(uuid())
+
+  condoId String
+
+  condo Condo @relation(fields: [condoId], references: [id], onDelete: Cascade)
+
+  title String
+
+  body String @db.Text
+
   announcementType AnnouncementType
-  expiryDate       DateTime?
-  isPinned         Boolean          @default(false)
-  createdById      String
-  createdBy        User             @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  createdByRole    CreatorRole?
-  imageUrl         String?
-  isPublic         Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  deletedAt        DateTime?
+
+  expiryDate DateTime?
+
+  isPinned Boolean @default(false)
+
+  createdById String
+
+  createdBy User @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdByRole CreatorRole?
+
+  imageUrl String?
+
+  isPublic Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([condoId])
   @@index([createdById])
@@ -652,25 +716,33 @@ model Announcement {
 }
 
 model Report {
-  id              String         @id @default(uuid())
-  condoId         String
-  condo           Condo          @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  title           String
-  description     String         @db.Text
-  category        ReportCategory
-  photoUrl        String?
-  status          ReportStatus   @default(reported)
-  reporterId      String
-  reporter        User           @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  reporterRole    CreatorRole?
-  priority        ReportPriority
-  assignedToId    String?
-  assignedTo      User?          @relation("ReportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  id String @id @default(uuid())
+
+  condoId String
+  condo   Condo  @relation(fields: [condoId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String         @db.Text
+  category    ReportCategory
+  photoUrl    String?
+  status      ReportStatus   @default(reported)
+
+  reporterId   String
+  reporter     User         @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reporterRole CreatorRole?
+
+  priority     ReportPriority
+  assignedToId String?
+  assignedTo   User?          @relation("ReportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
   resolvedAt      DateTime?
-  resolutionNotes String?        @db.Text
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  deletedAt       DateTime?
+  resolutionNotes String?   @db.Text
+
+  responses ReportResponse[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([condoId])
   @@index([reporterId])
@@ -682,27 +754,45 @@ model Report {
 }
 
 model LostFound {
-  id            String            @id @default(uuid())
-  condoId       String
-  condo         Condo             @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  type          LostFoundType
-  userId        String
-  user          User              @relation("LostFoundUser", fields: [userId], references: [id], onDelete: Restrict)
-  itemName      String
-  description   String            @db.Text
-  category      LostFoundCategory
-  photoUrl      String?
-  location      String?
+  id String @id @default(uuid())
+
+  condoId String
+
+  condo Condo @relation(fields: [condoId], references: [id], onDelete: Cascade)
+
+  type LostFoundType
+
+  userId String
+
+  user User @relation("LostFoundUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  itemName String
+
+  description String @db.Text
+
+  category LostFoundCategory
+
+  photoUrl String?
+
+  location String?
+
   dateLostFound DateTime
-  status        LostFoundStatus   @default(open)
-  claimedById   String?
-  claimedBy     User?             @relation("LostFoundClaimant", fields: [claimedById], references: [id], onDelete: SetNull)
-  claimVerified Boolean           @default(false)
-  verifiedById  String?
-  verifiedBy    User?             @relation("LostFoundVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  deletedAt     DateTime?
+
+  status LostFoundStatus @default(open)
+
+  claimedById String?
+
+  claimedBy User? @relation("LostFoundClaimant", fields: [claimedById], references: [id], onDelete: SetNull)
+
+  claimVerified Boolean @default(false)
+
+  verifiedById String?
+
+  verifiedBy User? @relation("LostFoundVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([condoId])
   @@index([userId])
@@ -738,29 +828,76 @@ model ChatMessage {
 }
 
 model Promotion {
-  id            String       @id @default(uuid())
-  condoId       String
-  condo         Condo        @relation(fields: [condoId], references: [id], onDelete: Cascade)
-  type          PromoType
-  title         String
-  description   String       @db.Text
-  price         Decimal      @db.Decimal(15, 2)
-  postedById    String
-  postedBy      User         @relation("PromotionPoster", fields: [postedById], references: [id], onDelete: Restrict)
-  postedByRole  CreatorRole?
-  expiresAt     DateTime
-  isActive      Boolean      @default(true)
-  imageUrl      String?
-  contactNumber String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  deletedAt     DateTime?
+  id String @id @default(uuid())
 
-  @@index([condoId])
-  @@index([postedById])
-  @@index([type])
+  title       String
+  description String    @db.Text
+  type        PromoType
+  category    String? // Simple category: 'electronics', 'fashion', 'food', etc.
+
+  price    Decimal @db.Decimal(15, 2) // How much business paid
+  currency String  @default("ETB")
+
+  status   PromoStatus @default(pending)
+  isActive Boolean     @default(true)
+
+  reviewedById    String?
+  reviewedBy      User?     @relation("PromotionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  rejectionReason String?   @db.Text
+
+  businessName  String  @default("Unknown Business")
+  contactPerson String?
+  contactNumber String
+  email         String?
+  websiteUrl    String?
+
+  imageUrl         String? // Main image
+  additionalImages String[] // Additional images (Cloudinary URLs)
+
+  expiresAt   DateTime
+  publishedAt DateTime?
+
+  condoId String?
+  condo   Condo?  @relation(fields: [condoId], references: [id], onDelete: SetNull)
+
+  postedById   String
+  postedBy     User         @relation("PromotionPoster", fields: [postedById], references: [id], onDelete: Restrict)
+  postedByRole CreatorRole?
+
+  views  Int @default(0)
+  clicks Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status])
   @@index([isActive])
   @@index([expiresAt])
+  @@index([type])
+  @@index([condoId])
+  @@index([postedById])
   @@index([deletedAt])
   @@map("promotions")
+}
+
+model ReportResponse {
+  id String @id @default(uuid())
+
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  message         String  @db.Text
+  isAdminResponse Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reportId])
+  @@index([userId])
+  @@map("report_responses")
 }
