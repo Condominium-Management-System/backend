@@ -2,166 +2,231 @@ import express from "express";
 
 import {
   getDashboardStats,
-  getUsers,
+  adminAddUserToEqub,
+  adminRemoveUserFromEqub,
+  adminAddUserToIddir,
+  adminRemoveUserFromIddir,
+  getAdminEqubs,
+  getAdminIddirs,
+  getAdminPayments,
+  getAdminTransactions,
+  getAdminServiceFees,
+} from "../controllers/admin.controller.js";
+
+import {
+  getAllUsers,
   getUserById,
-  createUser,
-  updateUser,
+  updateUserByAdmin,
   deleteUser,
   restoreUser,
   verifyUser,
   updateUserRole,
-  assignUserCondo,
-} from "../controllers/admin.controller.js";
+} from "../controllers/user.controller.js";
 
 import {
-  authenticate,
-} from "../middleware/auth.middleware.js";
+  createRoom,
+  searchRooms,
+  getAllRooms,
+  getRoomById,
+  updateRoom,
+  updateRoomStatus,
+  deleteRoom,
+  getAvailableRooms,
+  getOccupiedRooms,
+  getReservedRooms,
+} from "../controllers/room.controller.js";
 
-import {
-  authorizeRoles,
-} from "../middleware/role.middleware.js";
+import { register } from "../controllers/auth.controller.js";
+import { authenticate } from "../middleware/auth.middleware.js";
+import { authorizeRoles } from "../middleware/role.middleware.js";
+import { Roles } from "../config/roles.config.js";
 
-import {
-  Roles,
-} from "../config/roles.config.js";
-
-
-const router =
-  express.Router();
-
-
-// ALL ADMIN ROUTES REQUIRE LOGIN
+const router = express.Router();
 
 router.use(authenticate);
 
-
-// DASHBOARD
+// Dashboard
 
 router.get(
   "/dashboard",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   getDashboardStats
 );
 
-
-// USERS
+// Users
 
 router.get(
   "/users",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
-  getUsers
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAllUsers
 );
-
 
 router.get(
   "/users/:id",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   getUserById
 );
 
-
 router.post(
   "/users",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
-  createUser
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  register
 );
-
 
 router.patch(
   "/users/:id",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
-  updateUser
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  updateUserByAdmin
 );
-
 
 router.delete(
   "/users/:id",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   deleteUser
 );
 
-
-// RESTORE
-
 router.patch(
   "/users/:id/restore",
-
-  authorizeRoles(
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.SUPER_ADMIN),
   restoreUser
 );
 
-
-// VERIFY
-
 router.patch(
   "/users/:id/verify",
-
-  authorizeRoles(
-    Roles.CONDO_ADMIN,
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   verifyUser
 );
 
-
-// PROMOTE / DEMOTE
-
 router.patch(
   "/users/:id/role",
-
-  authorizeRoles(
-    Roles.SUPER_ADMIN
-  ),
-
+  authorizeRoles(Roles.SUPER_ADMIN),
   updateUserRole
 );
 
+// Rooms
 
-// MOVE USER BETWEEN CONDOS
-
-router.patch(
-  "/users/:id/condo",
-
-  authorizeRoles(
-    Roles.SUPER_ADMIN
-  ),
-
-  assignUserCondo
+router.get(
+  "/rooms",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAllRooms
 );
 
+router.get(
+  "/rooms/search",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  searchRooms
+);
+
+router.get(
+  "/rooms/available",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAvailableRooms
+);
+
+router.get(
+  "/rooms/occupied",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getOccupiedRooms
+);
+
+router.get(
+  "/rooms/reserved",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getReservedRooms
+);
+
+router.post(
+  "/rooms",
+  authorizeRoles(Roles.SUPER_ADMIN, Roles.CONDO_ADMIN),
+  createRoom
+);
+
+router.get(
+  "/rooms/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getRoomById
+);
+
+router.patch(
+  "/rooms/:id",
+  authorizeRoles(Roles.SUPER_ADMIN, Roles.CONDO_ADMIN),
+  updateRoom
+);
+
+router.patch(
+  "/rooms/:id/status",
+  authorizeRoles(Roles.SUPER_ADMIN, Roles.CONDO_ADMIN),
+  updateRoomStatus
+);
+
+router.delete(
+  "/rooms/:id",
+  authorizeRoles(Roles.SUPER_ADMIN, Roles.CONDO_ADMIN),
+  deleteRoom
+);
+
+// Equbs
+
+router.get(
+  "/equbs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminEqubs
+);
+
+router.post(
+  "/equbs/members",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminAddUserToEqub
+);
+
+router.delete(
+  "/equbs/:equbId/members/:userId",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminRemoveUserFromEqub
+);
+
+// Iddirs
+
+router.get(
+  "/iddirs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminIddirs
+);
+
+router.post(
+  "/iddirs/members",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminAddUserToIddir
+);
+
+router.delete(
+  "/iddirs/:iddirId/members/:userId",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminRemoveUserFromIddir
+);
+
+// Payments
+
+router.get(
+  "/payments",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminPayments
+);
+
+// Transactions
+
+router.get(
+  "/transactions",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminTransactions
+);
+
+// Service Fees
+
+router.get(
+  "/service-fees",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminServiceFees
+);
 
 export default router;
