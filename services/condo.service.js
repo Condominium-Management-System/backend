@@ -91,6 +91,115 @@ export const createCondoService = async (payload) => {
 };
 
 
+
+// SEARCH CONDOMINIUMS
+
+export const searchCondosService = async (search) => {
+  if (!search || !search.trim()) {
+    throw new AppError("Search term is required", 400);
+  }
+
+  const term = search.trim();
+  const numericValue = Number(term);
+  const isNumber = !Number.isNaN(numericValue);
+
+  let booleanValue;
+
+  if (term.toLowerCase() === "true") {
+    booleanValue = true;
+  } else if (term.toLowerCase() === "false") {
+    booleanValue = false;
+  }
+
+  const OR = [
+    {
+      condoName: {
+        contains: term,
+        mode: "insensitive"
+      }
+    },
+    {
+      condoCode: {
+        contains: term,
+        mode: "insensitive"
+      }
+    },
+    {
+      address: {
+        contains: term,
+        mode: "insensitive"
+      }
+    },
+    {
+      city: {
+        contains: term,
+        mode: "insensitive"
+      }
+    },
+    {
+      blockNumbers: {
+        has: term
+      }
+    }
+  ];
+
+  if (isNumber) {
+    OR.push(
+      {
+        maxAdmins: numericValue
+      },
+      {
+        gpsCoordinates: {
+          path: ["latitude"],
+          equals: numericValue
+        }
+      },
+      {
+        gpsCoordinates: {
+          path: ["longitude"],
+          equals: numericValue
+        }
+      }
+    );
+  }
+
+  if (booleanValue !== undefined) {
+    OR.push({
+      activeStatus: booleanValue
+    });
+  }
+
+  try {
+    const parsedJson = JSON.parse(term);
+
+    OR.push({
+      customSettings: {
+        equals: parsedJson
+      }
+    });
+  } catch {
+    // Ignore invalid JSON
+  }
+
+  return prisma.condo.findMany({
+    where: {
+      deletedAt: null,
+      OR
+    },
+    orderBy: {
+      createdAt: "desc"
+    },
+    include: {
+      _count: {
+        select: {
+          users: true,
+          blocks: true,
+          rooms: true
+        }
+      }
+    }
+  });
+};
 // GET ALL CONDOMINIUMS
 
 export const getAllCondosService = async () => {
