@@ -4,6 +4,10 @@ import {
   createRoomService,
   getAllRoomsService,
   getRoomByIdService,
+  getAllRoomsServiceBySearch,
+  getPublicRoomsService,
+  getPublicRoomByIdService,
+  getPublicRoomStatisticsService,
   updateRoomService,
   updateRoomStatusService,
   deleteRoomService,
@@ -12,276 +16,291 @@ import {
   getReservedRoomsService
 } from "../services/room.service.js";
 
-
-// CREATE
-
+// CREATE ROOM
 export const createRoom = asyncHandler(
   async (req, res) => {
-
-    const room =
-      await createRoomService(
-        req.body,
-        req.user
-      );
-
+    const room = await createRoomService(
+      req.params.condoId,
+      req.body,
+      req.user
+    );
 
     res.status(201).json({
-
       success: true,
-
-      message:
-        "Room created successfully",
-
+      message: "Room created successfully",
       data: room
-
     });
-
   }
 );
 
-
-// GET ALL
-
-export const getAllRooms = asyncHandler(
+// PUBLIC GET ROOMS
+export const getPublicRooms = asyncHandler(
   async (req, res) => {
-
     const rooms =
-      await getAllRoomsService({
-
-        requester:
-          req.user,
-
-        condoId:
-          req.query.condoId,
-
-        blockId:
-          req.query.blockId,
-
-        status:
-          req.query.status
-
+      await getPublicRoomsService({
+        condoId: req.query.condoId,
+        blockId: req.query.blockId,
+        status: req.query.status,
+        search: req.query.search,
+        floorNo: req.query.floorNo,
+        model: req.query.model
       });
 
-
     res.status(200).json({
-
       success: true,
-
+      count: rooms.length,
       data: rooms
-
     });
-
   }
 );
 
+// PUBLIC SEARCH ROOMS
+export const searchPublicRooms =
+  asyncHandler(
+    async (req, res) => {
+      const rooms =
+        await getPublicRoomsService({
+          condoId: req.query.condoId,
+          blockId: req.query.blockId,
+          status: req.query.status,
+          search: req.query.search,
+          floorNo: req.query.floorNo,
+          model: req.query.model
+        });
 
-// GET ONE
+      res.status(200).json({
+        success: true,
+        count: rooms.length,
+        data: rooms
+      });
+    }
+  );
 
-export const getRoomById = asyncHandler(
-  async (req, res) => {
+// PUBLIC GET ROOM BY ID
+export const getPublicRoomById =
+  asyncHandler(
+    async (req, res) => {
+      const room =
+        await getPublicRoomByIdService(
+          req.params.roomId
+        );
 
-    const room =
-      await getRoomByIdService(
+      res.status(200).json({
+        success: true,
+        data: room
+      });
+    }
+  );
 
-        req.params.id,
+// PUBLIC BLOCK STATISTICS
+export const getPublicRoomStatistics =
+  asyncHandler(
+    async (req, res) => {
+      const statistics =
+        await getPublicRoomStatisticsService(
+          req.params.blockId
+        );
 
-        req.user
+      res.status(200).json({
+        success: true,
+        data: statistics
+      });
+    }
+  );
 
-      );
+// ADMIN GET ALL ROOMS
+export const getAllRooms =
+  asyncHandler(
+    async (req, res) => {
+      const rooms =
+        await getAllRoomsService({
+          condoId:
+            req.params.condoId || null,
 
+          blockId:
+            req.query.blockId,
 
-    res.status(200).json({
+          status:
+            req.query.status,
 
-      success: true,
+          requester:
+            req.user
+        });
 
-      data: room
+      res.status(200).json({
+        success: true,
+        count: rooms.length,
+        data: rooms
+      });
+    }
+  );
 
-    });
+// ADMIN SEARCH ROOMS
+export const searchRooms =
+  asyncHandler(
+    async (req, res) => {
+      const rooms =
+        await getAllRoomsServiceBySearch({
+          condoId:
+            req.params.condoId || null,
 
-  }
-);
+          blockId:
+            req.query.blockId,
 
+          status:
+            req.query.status,
 
-// UPDATE
+          search:
+            req.query.search,
 
-export const updateRoom = asyncHandler(
-  async (req, res) => {
+          requester:
+            req.user
+        });
 
-    const room =
-      await updateRoomService(
+      res.status(200).json({
+        success: true,
+        count: rooms.length,
+        data: rooms
+      });
+    }
+  );
 
-        req.params.id,
+// ADMIN GET ROOM BY ID
+export const getRoomById =
+  asyncHandler(
+    async (req, res) => {
+      const room =
+        await getRoomByIdService(
+          req.params.condoId || null,
 
-        req.body,
+          req.params.roomId ||
+            req.params.id,
 
-        req.user
+          req.user
+        );
 
-      );
+      res.status(200).json({
+        success: true,
+        data: room
+      });
+    }
+  );
 
+// UPDATE ROOM
+export const updateRoom =
+  asyncHandler(
+    async (req, res) => {
+      const room =
+        await updateRoomService(
+          req.params.condoId,
+          req.params.roomId,
+          req.body,
+          req.user
+        );
 
-    res.status(200).json({
+      res.status(200).json({
+        success: true,
+        message:
+          "Room updated successfully",
+        data: room
+      });
+    }
+  );
 
-      success: true,
-
-      message:
-        "Room updated successfully",
-
-      data: room
-
-    });
-
-  }
-);
-
-
-// UPDATE STATUS
-
+// UPDATE ROOM STATUS
 export const updateRoomStatus =
   asyncHandler(
     async (req, res) => {
-
       const room =
         await updateRoomStatusService(
-
-          req.params.id,
-
+          req.params.condoId,
+          req.params.roomId,
           req.body,
-
           req.user
-
         );
 
-
       res.status(200).json({
-
         success: true,
-
         message:
           "Room status updated successfully",
-
         data: room
-
       });
-
     }
   );
 
-
-// AVAILABLE ROOMS
-
+// GET AVAILABLE ROOMS
 export const getAvailableRooms =
   asyncHandler(
     async (req, res) => {
-
       const rooms =
         await getAvailableRoomsService(
-
+          req.params.condoId || null,
           req.user,
-
-          req.query.condoId,
-
           req.query.blockId
-
         );
 
-
       res.status(200).json({
-
         success: true,
-
+        count: rooms.length,
         data: rooms
-
       });
-
     }
   );
 
-
-// OCCUPIED ROOMS
-
+// GET OCCUPIED ROOMS
 export const getOccupiedRooms =
   asyncHandler(
     async (req, res) => {
-
       const rooms =
         await getOccupiedRoomsService(
-
+          req.params.condoId || null,
           req.user,
-
-          req.query.condoId,
-
           req.query.blockId
-
         );
 
-
       res.status(200).json({
-
         success: true,
-
+        count: rooms.length,
         data: rooms
-
       });
-
     }
   );
 
-
-// RESERVED ROOMS
-
+// GET RESERVED ROOMS
 export const getReservedRooms =
   asyncHandler(
     async (req, res) => {
-
       const rooms =
         await getReservedRoomsService(
-
+          req.params.condoId || null,
           req.user,
-
-          req.query.condoId,
-
           req.query.blockId
-
         );
 
-
       res.status(200).json({
-
         success: true,
-
+        count: rooms.length,
         data: rooms
-
       });
-
     }
   );
 
+// DELETE ROOM
+export const deleteRoom =
+  asyncHandler(
+    async (req, res) => {
+      const result =
+        await deleteRoomService(
+          req.params.condoId,
+          req.params.roomId,
+          req.user
+        );
 
-// DELETE
-
-export const deleteRoom = asyncHandler(
-  async (req, res) => {
-
-    const result =
-      await deleteRoomService(
-
-        req.params.id,
-
-        req.user
-
-      );
-
-
-    res.status(200).json({
-
-      success: true,
-
-      message:
-        "Room deleted successfully",
-
-      data: result
-
-    });
-
-  }
-);
+      res.status(200).json({
+        success: true,
+        message:
+          "Room deleted successfully",
+        data: result
+      });
+    }
+  );

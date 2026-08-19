@@ -1,13 +1,13 @@
 import express from "express";
 
 import {
-  addIddirMemberController,
-  getIddirMembersController,
-  searchIddirMembersController,
-  getIddirMemberByIdController,
-  updateIddirMemberController,
-  removeIddirMemberController,
-} from "../controllers/iddirMember.controller.js";
+  addEqubMemberController,
+  getEqubMembersController,
+  searchEqubMembersController,
+  getEqubMemberByIdController,
+  updateEqubMemberController,
+  removeEqubMemberController,
+} from "../controllers/equbMember.controller.js";
 
 import { authenticate } from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
@@ -17,104 +17,114 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// Add Iddir member
+// Add Equb member
 router.post(
   "/",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  addIddirMemberController
+  addEqubMemberController
 );
 
-// Get all members
+// Get all Equb members
 router.get(
   "/",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  getIddirMembersController
+  getEqubMembersController
 );
 
-// Search all members
+// Search all Equb members
 router.get(
   "/search",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  searchIddirMembersController
+  searchEqubMembersController
 );
 
-// Get members by condominium
+// Get Equb members by condominium
 router.get(
   "/:condoId",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  getIddirMembersController
+  getEqubMembersController
 );
 
-// Search members inside condominium
+// Search Equb members inside condominium
 router.get(
   "/:condoId/search",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  searchIddirMembersController
+  searchEqubMembersController
 );
 
-// Get members of Iddir inside condominium
+// Get members of Equb inside condominium
 router.get(
-  "/:condoId/iddir/:iddirId",
+  "/:condoId/equb/:equbId",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  getIddirMembersController
+  getEqubMembersController
 );
 
-// Get member by ID
+// Get Equb member by ID
 router.get(
   "/:id",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  getIddirMemberByIdController
+  getEqubMemberByIdController
 );
 
-// Get member by ID inside condominium
+// Get Equb member by ID inside condominium
 router.get(
   "/:condoId/:id",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  getIddirMemberByIdController
+  getEqubMemberByIdController
 );
 
-// Update member
+// Get Equb member by ID inside Equb
+router.get(
+  "/:condoId/equb/:equbId/users/:id",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getEqubMemberByIdController
+);
+
+// Update Equb member
 router.patch(
   "/:condoId/:id",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  updateIddirMemberController
+  updateEqubMemberController
 );
 
-// Remove member
+// Remove Equb member
 router.delete(
   "/:condoId/:id",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
-  removeIddirMemberController
+  removeEqubMemberController
 );
 
 export default router;
