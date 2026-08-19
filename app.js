@@ -6,6 +6,7 @@ import morgan from "morgan";
 import authRouter from "./routes/auth.router.js";
 import { errorHandler, notFound } from "./middleware/error.middleware.js";
 
+import authRouter from "./routes/auth.route.js"
 import condoRoutes from "./routes/condo.route.js";
 import blockRouter from "./routes/block.route.js";
 import roomRoutes from "./routes/room.route.js";
@@ -90,7 +91,7 @@ app.use(
   authRateLimiter,
   authRouter
 );
-
+app.use("/api/auth", authRouter)
 app.use("/api/condos", condoRoutes);
 app.use("/api/blocks", blockRouter);
 app.use("/api/rooms", roomRoutes);
