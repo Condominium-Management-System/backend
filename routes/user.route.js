@@ -2,12 +2,14 @@ import express from "express";
 
 import {
   getAllUsers,
+  searchUsers,
   getUserById,
   getUserProfile,
   verifyUser,
   updateUserRole,
   updateUserByAdmin,
-  deleteUser
+  deleteUser,
+  restoreUser
 } from "../controllers/user.controller.js";
 
 import { authenticate } from "../middleware/auth.middleware.js";
@@ -16,17 +18,21 @@ import {
   authorizeRoles
 } from "../middleware/role.middleware.js";
 
-import { Roles } from "../config/roles.config.js";
-
+import {
+  Roles
+} from "../config/roles.config.js";
 
 const router = express.Router();
 
-
-
-
 router.use(authenticate);
 
+// Get user profile
+router.get(
+  "/:userId/profile",
+  getUserProfile
+);
 
+// Get all users
 router.get(
   "/",
   authorizeRoles(
@@ -37,17 +43,61 @@ router.get(
   getAllUsers
 );
 
-
-
 router.get(
-  "/:id",
-  getUserProfile
+  "/:condoId",
+  authorizeRoles(
+    Roles.GUARD,
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getAllUsers
 );
 
+// Search users
+router.get(
+  "/search",
+  authorizeRoles(
+    Roles.GUARD,
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  searchUsers
+);
 
+router.get(
+  "/:condoId/search",
+  authorizeRoles(
+    Roles.GUARD,
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  searchUsers
+);
 
+// Get one user
+router.get(
+  "/user/:userId",
+  authorizeRoles(
+    Roles.GUARD,
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getUserById
+);
+
+router.get(
+  "/:condoId/:userId",
+  authorizeRoles(
+    Roles.GUARD,
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getUserById
+);
+
+// Verify user
 router.patch(
-  "/:id/verify",
+  "/:condoId/:userId/verify",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
@@ -55,21 +105,18 @@ router.patch(
   verifyUser
 );
 
-
-
-
+// Update role
 router.patch(
-  "/:id/role",
+  "/:condoId/:userId/role",
   authorizeRoles(
     Roles.SUPER_ADMIN
   ),
   updateUserRole
 );
 
-
-
+// Update user
 router.patch(
-  "/:id",
+  "/:condoId/:userId",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
@@ -77,11 +124,9 @@ router.patch(
   updateUserByAdmin
 );
 
-
-
-
+// Delete user
 router.delete(
-  "/:id",
+  "/:condoId/:userId",
   authorizeRoles(
     Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
@@ -89,5 +134,13 @@ router.delete(
   deleteUser
 );
 
+// Restore user
+router.patch(
+  "/:condoId/:userId/restore",
+  authorizeRoles(
+    Roles.SUPER_ADMIN
+  ),
+  restoreUser
+);
 
 export default router;
