@@ -1,8 +1,5 @@
 import AppError from "../errorhandler/AppError.js";
 import { prisma } from "../config/prisma.config.js";
-import {
-  hashPassword
-} from "../utils/password.js";
 
 import {
   updateUserRoleValidation,
@@ -10,63 +7,212 @@ import {
   updateUserByAdminValidation
 } from "../inputValidation/userManagement.validation.js";
 
+import { adminUserSelect } from "../utils/adminUser.js";
 
-// PUBLIC USER PROFILE
+
+// 
+// HELPERS
+// 
+
+const isSuperAdmin = (user) =>
+  user?.role === "super_admin";
+
+const isCondoAdmin = (user) =>
+  user?.role === "condo_admin";
+
+const checkCondoAccess = (
+  condoId,
+  requester
+) => {
+
+  if (isSuperAdmin(requester)) {
+    return true;
+  }
+
+  if (
+    !requester?.condoId ||
+    requester.condoId !== String(condoId)
+  ) {
+    throw new AppError(
+      "You can only access users inside your condominium",
+      403
+    );
+  }
+
+  return true;
+};
+
+
+// 
+// PUBLIC USER SELECT
+// 
 
 const publicUserSelect = {
   id: true,
   fullName: true,
   role: true,
+
   profilePhoto: true,
+
   phoneNumber: true,
   email: true,
+
   condoId: true,
   condoCode: true,
+
   block: true,
-  fan:true,
-  addToEqubById:true,
-  addToIddirById:true,
-  isGetEqub:true,
-  isInEqub:true,
-  isInIddir:true,
   roomNo: true,
+  fan: true,
+
+  addToEqubById: true,
+  addToIddirById: true,
+
+  isGetEqub: true,
+  isInEqub: true,
+  isInIddir: true,
+
   isVerified: true,
+
   registerDate: true,
-  dueDate:true,
+  dueDate: true,
+
   createdAt: true,
   updatedAt: true
 };
 
 
-// GET ALL USERS
+// 
+// SEARCH USERS
+// 
 
-export const getAllUsersService = async ({
+export const searchUsersService = async (
+  search,
   condoId,
-  role,
-  isVerified
-} = {}) => {
+  requester = null
+) => {
+
+  if (!search || !search.trim()) {
+    throw new AppError(
+      "Search query is required",
+      400
+    );
+  }
+
+  const keyword = search.trim();
 
   const where = {
     deletedAt: null
   };
 
-  if (condoId) {
-    where.condoId = condoId;
+  if (isSuperAdmin(requester)) {
+
+    if (condoId) {
+      where.condoId = String(condoId);
+    }
+
+  } else {
+
+    if (!requester?.condoId) {
+      throw new AppError(
+        "Condominium access is required",
+        403
+      );
+    }
+
+    where.condoId = requester.condoId;
   }
 
-  if (role) {
-    where.role = role;
+  const orConditions = [
+    {
+      fullName: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      email: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      phoneNumber: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      fan: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      block: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      roomNo: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      condoCode: {
+        contains: keyword,
+        mode: "insensitive"
+      }
+    },
+    {
+      condo: {
+        condoName: {
+          contains: keyword,
+          mode: "insensitive"
+        }
+      }
+    }
+  ];
+
+  const validRoles = [
+    "super_admin",
+    "condo_admin",
+    "guard",
+    "resident"
+  ];
+
+  if (
+    validRoles.includes(
+      keyword.toLowerCase()
+    )
+  ) {
+    orConditions.push({
+      role: keyword.toLowerCase()
+    });
   }
 
-  if (isVerified !== undefined) {
-    where.isVerified = isVerified;
+  if (
+    keyword.toLowerCase() === "verified"
+  ) {
+    orConditions.push({
+      isVerified: true
+    });
   }
+
+  if (
+    keyword.toLowerCase() === "unverified"
+  ) {
+    orConditions.push({
+      isVerified: false
+    });
+  }
+
+  where.OR = orConditions;
 
   return prisma.user.findMany({
     where,
-
-    select: publicUserSelect,
-
+    select: adminUserSelect,
     orderBy: {
       createdAt: "desc"
     }
@@ -74,18 +220,108 @@ export const getAllUsersService = async ({
 };
 
 
-// GET USER BY ID
+// 
+// GET ALL USERS BY CONDO
+// 
 
-export const getUserByIdService = async (userId) => {
+export const getUsersService = async (
+  condoId,
+  requester,
+  filters = {}
+) => {
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(userId),
-      deletedAt: null
-    },
+  const where = {
+    deletedAt: null
+  };
 
-    select: publicUserSelect
+  if (isSuperAdmin(requester)) {
+
+    if (condoId) {
+      where.condoId = String(condoId);
+    }
+
+  } else {
+
+    if (!requester?.condoId) {
+      throw new AppError(
+        "Condominium access is required",
+        403
+      );
+    }
+
+    where.condoId = requester.condoId;
+  }
+
+  if (filters.role) {
+    where.role = filters.role;
+  }
+
+  if (filters.isVerified !== undefined) {
+    where.isVerified = filters.isVerified;
+  }
+
+  if (filters.block) {
+    where.block = {
+      contains: filters.block.trim(),
+      mode: "insensitive"
+    };
+  }
+
+  if (filters.roomNo) {
+    where.roomNo = {
+      contains: filters.roomNo.trim(),
+      mode: "insensitive"
+    };
+  }
+
+  return prisma.user.findMany({
+    where,
+    select: adminUserSelect,
+    orderBy: {
+      createdAt: "desc"
+    }
   });
+};
+
+
+// 
+// GET USER BY ID
+// 
+
+export const getUserByIdService = async (
+  condoId,
+  userId,
+  requester
+) => {
+
+  const where = {
+    id: String(userId),
+    deletedAt: null
+  };
+
+  if (isSuperAdmin(requester)) {
+
+    if (condoId) {
+      where.condoId = String(condoId);
+    }
+
+  } else {
+
+    if (!requester?.condoId) {
+      throw new AppError(
+        "Condominium access is required",
+        403
+      );
+    }
+
+    where.condoId = requester.condoId;
+  }
+
+  const user =
+    await prisma.user.findFirst({
+      where,
+      select: adminUserSelect
+    });
 
   if (!user) {
     throw new AppError(
@@ -98,40 +334,46 @@ export const getUserByIdService = async (userId) => {
 };
 
 
-// GET USER PROFILE
+// 
+// PUBLIC USER PROFILE
+// 
 
 export const getUserProfileService = async (
-  targetUserId,
+  userId,
   requester
 ) => {
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(targetUserId),
-      deletedAt: null
-    },
+  const user =
+    await prisma.user.findFirst({
 
-    select: {
-      id: true,
-      fullName: true,
-      role: true,
+      where: {
+        id: String(userId),
+        deletedAt: null
+      },
 
-      profilePhoto: true,
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
 
-      email: true,
-      phoneNumber: true,
+        profilePhoto: true,
 
-      condoId: true,
-      condoCode: true,
+        email: true,
+        phoneNumber: true,
 
-      block: true,
-      roomNo: true,
+        condoId: true,
+        condoCode: true,
 
-      isVerified: true,
+        block: true,
+        roomNo: true,
 
-      createdAt: true
-    }
-  });
+        isVerified: true,
+
+        createdAt: true
+      }
+
+    });
+
 
   if (!user) {
     throw new AppError(
@@ -141,47 +383,82 @@ export const getUserProfileService = async (
   }
 
 
-  // ADMIN / GUARD / SUPER ADMIN
+  // Super admin gets full profile
 
   if (
-    requester.role === "super_admin" ||
-    requester.role === "condo_admin" ||
-    requester.role === "guard"
+    requester?.role === "super_admin"
   ) {
     return user;
   }
 
 
-  // USER VIEWING THEMSELVES
+  // Condo admin / guard
+  // can see full profile
 
-  if (requester.id === user.id) {
+  if (
+    requester?.role === "condo_admin" ||
+    requester?.role === "guard"
+  ) {
+
     return user;
   }
 
 
-  // NORMAL USER -> OTHER USER
+  // User viewing themselves
+
+  if (
+    requester?.id === user.id
+  ) {
+    return user;
+  }
+
+
+  // Public / normal user
 
   return {
-    id: user.id,
-    fullName: user.fullName,
-    role: user.role,
-    profilePhoto: user.profilePhoto,
-    email: user.email,
-    phoneNumber: user.phoneNumber
+    id:
+      user.id,
+
+    fullName:
+      user.fullName,
+
+    role:
+      user.role,
+
+    profilePhoto:
+      user.profilePhoto,
+
+    email:
+      user.email,
+
+    phoneNumber:
+      user.phoneNumber
   };
 };
 
 
+// 
 // VERIFY USER
+// 
 
 export const verifyUserService = async (
+  condoId,
   userId,
   payload,
   requester
 ) => {
 
+  checkCondoAccess(
+    condoId,
+    requester
+  );
+
+
   const { error } =
-    verifyUserValidation.validate(payload);
+    verifyUserValidation.validate(
+      payload
+    );
+
 
   if (error) {
     throw new AppError(
@@ -191,57 +468,70 @@ export const verifyUserService = async (
   }
 
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(userId),
-      deletedAt: null
-    }
-  });
+  const user =
+    await prisma.user.findFirst({
+
+      where: {
+        id: String(userId),
+        condoId,
+        deletedAt: null
+      }
+
+    });
+
 
   if (!user) {
     throw new AppError(
-      "User not found",
+      "User not found in this condominium",
       404
     );
   }
 
 
-  // CONDO ADMIN CAN ONLY VERIFY USERS IN THEIR CONDO
-
-  if (requester.role === "condo_admin") {
-
-    if (user.condoId !== requester.condoId) {
-      throw new AppError(
-        "You cannot verify a user from another condominium",
-        403
-      );
-    }
-  }
-
-
   return prisma.user.update({
+
     where: {
       id: user.id
     },
 
     data: {
-      isVerified: payload.isVerified
+      isVerified:
+        payload.isVerified
     },
 
-    select: publicUserSelect
+    select:
+      publicUserSelect
+
   });
 };
 
 
+// 
 // CHANGE USER ROLE
+// 
 
 export const updateUserRoleService = async (
+  condoId,
   userId,
-  payload
+  payload,
+  requester
 ) => {
 
+  // Only super admin can change roles
+
+  if (!isSuperAdmin(requester)) {
+    throw new AppError(
+      "Only super admin can change user roles",
+      403
+    );
+  }
+
+
   const { error } =
-    updateUserRoleValidation.validate(payload);
+    updateUserRoleValidation.validate(
+      payload
+    );
+
 
   if (error) {
     throw new AppError(
@@ -251,24 +541,29 @@ export const updateUserRoleService = async (
   }
 
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(userId),
-      deletedAt: null
-    }
-  });
+  const user =
+    await prisma.user.findFirst({
+
+      where: {
+        id: String(userId),
+        condoId,
+        deletedAt: null
+      }
+
+    });
+
 
   if (!user) {
     throw new AppError(
-      "User not found",
+      "User not found in this condominium",
       404
     );
   }
 
 
-  // Prevent unnecessary update
-
-  if (user.role === payload.role) {
+  if (
+    user.role === payload.role
+  ) {
     throw new AppError(
       `User is already ${payload.role}`,
       409
@@ -277,31 +572,48 @@ export const updateUserRoleService = async (
 
 
   return prisma.user.update({
+
     where: {
       id: user.id
     },
 
     data: {
-      role: payload.role
+      role:
+        payload.role
     },
 
-    select: publicUserSelect
+    select:
+      publicUserSelect
+
   });
 };
 
 
+// 
 // UPDATE USER BY ADMIN
+// 
 
 export const updateUserByAdminService = async (
+  condoId,
   userId,
   payload,
   requester
 ) => {
 
-  const { error, value } =
+  checkCondoAccess(
+    condoId,
+    requester
+  );
+
+
+  const {
+    error,
+    value
+  } =
     updateUserByAdminValidation.validate(
       payload
     );
+
 
   if (error) {
     throw new AppError(
@@ -311,138 +623,152 @@ export const updateUserByAdminService = async (
   }
 
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(userId),
-      deletedAt: null
-    }
-  });
+  const user =
+    await prisma.user.findFirst({
+
+      where: {
+        id: String(userId),
+        condoId,
+        deletedAt: null
+      }
+
+    });
+
 
   if (!user) {
     throw new AppError(
-      "User not found",
+      "User not found in this condominium",
       404
     );
-  }
-
-
-  // CONDO ADMIN SCOPE
-
-  if (requester.role === "condo_admin") {
-
-    if (user.condoId !== requester.condoId) {
-      throw new AppError(
-        "You cannot modify a user from another condominium",
-        403
-      );
-    }
-
-    if (
-      value.role === "super_admin"
-    ) {
-      throw new AppError(
-        "Condo admin cannot promote a user to super admin",
-        403
-      );
-    }
   }
 
 
   const data = {};
 
 
+  // ====================================================
   // FULL NAME
+  // ====================================================
 
-  if (value.fullName !== undefined) {
-    data.fullName = value.fullName;
+  if (
+    value.fullName !== undefined
+  ) {
+
+    data.fullName =
+      value.fullName;
+
   }
 
 
+  // ====================================================
   // EMAIL
+  // ====================================================
 
-  if (value.email !== undefined) {
+  if (
+    value.email !== undefined &&
+    value.email !== user.email
+  ) {
 
-    if (value.email !== user.email) {
+    const existing =
+      await prisma.user.findUnique({
 
-      const existing =
-        await prisma.user.findUnique({
-          where: {
-            email: value.email
-          }
-        });
+        where: {
+          email:
+            value.email
+        }
 
-      if (existing) {
-        throw new AppError(
-          "Email is already registered",
-          409
-        );
-      }
+      });
+
+
+    if (existing) {
+      throw new AppError(
+        "Email is already registered",
+        409
+      );
     }
 
-    data.email = value.email;
+
+    data.email =
+      value.email;
   }
 
 
+  // ====================================================
   // PHONE
+  // ====================================================
 
-  if (value.phoneNumber !== undefined) {
+  if (
+    value.phoneNumber !== undefined &&
+    value.phoneNumber !== user.phoneNumber
+  ) {
 
-    if (
-      value.phoneNumber !== user.phoneNumber
-    ) {
+    const existing =
+      await prisma.user.findUnique({
 
-      const existing =
-        await prisma.user.findUnique({
-          where: {
-            phoneNumber:
-              value.phoneNumber
-          }
-        });
+        where: {
+          phoneNumber:
+            value.phoneNumber
+        }
 
-      if (existing) {
-        throw new AppError(
-          "Phone number is already registered",
-          409
-        );
-      }
+      });
+
+
+    if (existing) {
+      throw new AppError(
+        "Phone number is already registered",
+        409
+      );
     }
+
 
     data.phoneNumber =
       value.phoneNumber;
   }
 
 
+  // ====================================================
   // FAN
+  // ====================================================
 
-  if (value.fan !== undefined) {
+  if (
+    value.fan !== undefined &&
+    value.fan !== user.fan
+  ) {
 
-    if (value.fan !== user.fan) {
+    const existing =
+      await prisma.user.findUnique({
 
-      const existing =
-        await prisma.user.findUnique({
-          where: {
-            fan: value.fan
-          }
-        });
+        where: {
+          fan:
+            value.fan
+        }
 
-      if (existing) {
-        throw new AppError(
-          "FAN number is already registered",
-          409
-        );
-      }
+      });
+
+
+    if (existing) {
+      throw new AppError(
+        "FAN number is already registered",
+        409
+      );
     }
 
-    data.fan = value.fan;
+
+    data.fan =
+      value.fan;
   }
 
 
+  // ====================================================
   // ROLE
+  // ====================================================
 
-  if (value.role !== undefined) {
+  if (
+    value.role !== undefined
+  ) {
 
     if (
-      requester.role !== "super_admin"
+      !isSuperAdmin(requester)
     ) {
       throw new AppError(
         "Only super admin can change user roles",
@@ -450,16 +776,25 @@ export const updateUserByAdminService = async (
       );
     }
 
-    data.role = value.role;
+
+    data.role =
+      value.role;
   }
 
 
+  // ====================================================
   // CONDO
+  // ====================================================
 
-  if (value.condoId !== undefined) {
+  // Only super admin can move a user
+  // to another condominium.
+
+  if (
+    value.condoId !== undefined
+  ) {
 
     if (
-      requester.role !== "super_admin"
+      !isSuperAdmin(requester)
     ) {
       throw new AppError(
         "Only super admin can change condominium assignment",
@@ -467,13 +802,20 @@ export const updateUserByAdminService = async (
       );
     }
 
+
     const condo =
       await prisma.condo.findFirst({
+
         where: {
-          id: value.condoId,
-          deletedAt: null
+          id:
+            value.condoId,
+
+          deletedAt:
+            null
         }
+
       });
+
 
     if (!condo) {
       throw new AppError(
@@ -482,37 +824,70 @@ export const updateUserByAdminService = async (
       );
     }
 
-    data.condoId = condo.id;
-    data.condoCode = condo.condoCode;
+
+    data.condoId =
+      condo.id;
+
+    data.condoCode =
+      condo.condoCode;
   }
 
 
+  // ====================================================
   // BLOCK
+  // ====================================================
 
-  if (value.block !== undefined) {
-    data.block = value.block;
+  if (
+    value.block !== undefined
+  ) {
+
+    data.block =
+      value.block;
   }
-  //due date
-   if (value.dueDate !== undefined) {
-    data.dueDate = value.dueDate;
-  }
 
 
+  // ====================================================
   // ROOM
+  // ====================================================
 
-  if (value.roomNo !== undefined) {
-    data.roomNo = value.roomNo;
+  if (
+    value.roomNo !== undefined
+  ) {
+
+    data.roomNo =
+      value.roomNo;
   }
 
 
+  // ====================================================
+  // DUE DATE
+  // ====================================================
+
+  if (
+    value.dueDate !== undefined
+  ) {
+
+    data.dueDate =
+      value.dueDate;
+  }
+
+
+  // ====================================================
   // VERIFIED
+  // ====================================================
 
-  if (value.isVerified !== undefined) {
-    data.isVerified = value.isVerified;
+  if (
+    value.isVerified !== undefined
+  ) {
+
+    data.isVerified =
+      value.isVerified;
   }
 
 
-  if (Object.keys(data).length === 0) {
+  if (
+    Object.keys(data).length === 0
+  ) {
     throw new AppError(
       "No valid information was provided",
       400
@@ -521,65 +896,147 @@ export const updateUserByAdminService = async (
 
 
   return prisma.user.update({
+
     where: {
-      id: user.id
+      id:
+        user.id
     },
 
     data,
 
-    select: publicUserSelect
+    select:
+      publicUserSelect
+
   });
 };
 
 
+// 
 // DELETE USER
+// 
 
 export const deleteUserService = async (
+  condoId,
   userId,
   requester
 ) => {
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: String(userId),
-      deletedAt: null
-    }
-  });
+  checkCondoAccess(
+    condoId,
+    requester
+  );
+
+
+  const user =
+    await prisma.user.findFirst({
+
+      where: {
+        id:
+          String(userId),
+
+        condoId,
+
+        deletedAt:
+          null
+      }
+
+    });
+
 
   if (!user) {
     throw new AppError(
-      "User not found",
+      "User not found in this condominium",
       404
     );
   }
 
 
-  // Condo admin can only delete
-  // users in their condominium
-
-  if (
-    requester.role === "condo_admin" &&
-    user.condoId !== requester.condoId
-  ) {
-    throw new AppError(
-      "You cannot delete a user from another condominium",
-      403
-    );
-  }
-
-
   await prisma.user.update({
+
     where: {
-      id: user.id
+      id:
+        user.id
     },
 
     data: {
-      deletedAt: new Date()
+      deletedAt:
+        new Date()
     }
+
   });
 
 
   return {
     deleted: true
   };
+};
+
+
+// 
+// RESTORE USER
+// 
+
+export const restoreUserService = async (
+  condoId,
+  userId,
+  requester
+) => {
+
+  // Only super admin
+
+  if (
+    !isSuperAdmin(requester)
+  ) {
+    throw new AppError(
+      "Only super admin can restore users",
+      403
+    );
+  }
+
+
+  const user =
+    await prisma.user.findFirst({
+
+      where: {
+        id:
+          String(userId),
+
+        condoId
+      }
+
+    });
+
+
+  if (!user) {
+    throw new AppError(
+      "User not found in this condominium",
+      404
+    );
+  }
+
+
+  if (!user.deletedAt) {
+    throw new AppError(
+      "User is not deleted",
+      400
+    );
+  }
+
+
+  return prisma.user.update({
+
+    where: {
+      id:
+        user.id
+    },
+
+    data: {
+      deletedAt:
+        null
+    },
+
+    select:
+      adminUserSelect
+
+  });
 };

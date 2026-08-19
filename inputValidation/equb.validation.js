@@ -1,12 +1,19 @@
 import Joi from "joi";
 
+
+// CREATE EQUb
+
 export const createEqubValidation = Joi.object({
+
   condoId: Joi.string()
     .uuid()
     .required()
     .messages({
-      "string.uuid": "Condo ID must be a valid UUID",
-      "any.required": "Condo ID is required",
+      "string.uuid":
+        "Condo ID must be a valid UUID",
+
+      "any.required":
+        "Condo ID is required",
     }),
 
   name: Joi.string()
@@ -15,8 +22,14 @@ export const createEqubValidation = Joi.object({
     .max(100)
     .required()
     .messages({
-      "string.min": "Equb name must be at least 3 characters",
-      "any.required": "Equb name is required",
+      "string.empty":
+        "Equb name is required",
+
+      "string.min":
+        "Equb name must be at least 3 characters",
+
+      "any.required":
+        "Equb name is required",
     }),
 
   contributionAmount: Joi.number()
@@ -25,6 +38,7 @@ export const createEqubValidation = Joi.object({
     .messages({
       "number.positive":
         "Contribution amount must be greater than zero",
+
       "any.required":
         "Contribution amount is required",
     }),
@@ -35,6 +49,7 @@ export const createEqubValidation = Joi.object({
     .messages({
       "date.format":
         "Start date must be a valid ISO date",
+
       "any.required":
         "Start date is required",
     }),
@@ -45,12 +60,18 @@ export const createEqubValidation = Joi.object({
     .messages({
       "date.format":
         "Due date must be a valid ISO date",
+
       "any.required":
         "Due date is required",
     }),
+
 });
 
+
+// UPDATE EQUb
+
 export const updateEqubValidation = Joi.object({
+
   name: Joi.string()
     .trim()
     .min(3)
@@ -72,26 +93,24 @@ export const updateEqubValidation = Joi.object({
       "completed",
       "cancelled"
     ),
+
 }).min(1);
 
-export const addEqubMemberValidation = Joi.object({
-  userId: Joi.string()
-    .uuid()
+
+// SEARCH EQUb
+
+export const searchEqubValidation = Joi.object({
+
+  search: Joi.string()
+    .trim()
+    .min(1)
     .required()
     .messages({
-      "string.uuid":
-        "User ID must be a valid UUID",
-      "any.required":
-        "User ID is required",
-    }),
-});
+      "string.empty":
+        "Search query is required",
 
-export const updateEqubMemberValidation = Joi.object({
-  status: Joi.string()
-    .valid(
-      "active",
-      "inactive",
-      "removed"
-    )
-    .required(),
+      "any.required":
+        "Search query is required",
+    }),
+
 });

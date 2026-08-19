@@ -2,15 +2,15 @@ import AppError from "../errorhandler/AppError.js";
 
 import {
   getDashboardStatsService,
-  getUsersService,
-  getUserByIdService,
-  createUserService,
-  updateUserService,
-  deleteUserService,
-  restoreUserService,
-  verifyUserService,
-  updateUserRoleService,
-  assignUserCondoService,
+  adminAddUserToEqubService,
+  adminRemoveUserFromEqubService,
+  adminAddUserToIddirService,
+  adminRemoveUserFromIddirService,
+  getAdminEqubsService,
+  getAdminIddirsService,
+  getAdminPaymentsService,
+  getAdminTransactionsService,
+  getAdminServiceFeesService,
 } from "../services/admin.service.js";
 
 
@@ -38,65 +38,15 @@ export const getDashboardStats =
   };
 
 
-// GET USERS
+// ADD USER TO EQUB
 
-export const getUsers =
+export const adminAddUserToEqub =
   async (req, res, next) => {
 
     try {
 
       const result =
-        await getUsersService(
-          req.user,
-          req.query
-        );
-
-      res.status(200).json({
-        success: true,
-
-        ...result,
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  };
-
-
-// GET USER
-
-export const getUserById =
-  async (req, res, next) => {
-
-    try {
-
-      const user =
-        await getUserByIdService(
-          req.user,
-          req.params.id
-        );
-
-      res.status(200).json({
-        success: true,
-
-        data: user,
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  };
-
-
-// CREATE USER
-
-export const createUser =
-  async (req, res, next) => {
-
-    try {
-
-      const user =
-        await createUserService(
+        await adminAddUserToEqubService(
           req.user,
           req.body
         );
@@ -105,64 +55,7 @@ export const createUser =
         success: true,
 
         message:
-          "User created successfully",
-
-        data: user,
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  };
-
-
-// UPDATE USER
-
-export const updateUser =
-  async (req, res, next) => {
-
-    try {
-
-      const user =
-        await updateUserService(
-          req.user,
-          req.params.id,
-          req.body
-        );
-
-      res.status(200).json({
-        success: true,
-
-        message:
-          "User updated successfully",
-
-        data: user,
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  };
-
-
-// DELETE USER
-
-export const deleteUser =
-  async (req, res, next) => {
-
-    try {
-
-      const result =
-        await deleteUserService(
-          req.user,
-          req.params.id
-        );
-
-      res.status(200).json({
-        success: true,
-
-        message:
-          "User deleted successfully",
+          "User added to Equb successfully",
 
         data: result,
       });
@@ -173,26 +66,27 @@ export const deleteUser =
   };
 
 
-// RESTORE USER
+// REMOVE USER FROM EQUB
 
-export const restoreUser =
+export const adminRemoveUserFromEqub =
   async (req, res, next) => {
 
     try {
 
-      const user =
-        await restoreUserService(
+      const result =
+        await adminRemoveUserFromEqubService(
           req.user,
-          req.params.id
+          req.params.equbId,
+          req.params.userId
         );
 
       res.status(200).json({
         success: true,
 
         message:
-          "User restored successfully",
+          "User removed from Equb successfully",
 
-        data: user,
+        data: result,
       });
 
     } catch (error) {
@@ -201,27 +95,26 @@ export const restoreUser =
   };
 
 
-// VERIFY
+// ADD USER TO IDDIR
 
-export const verifyUser =
+export const adminAddUserToIddir =
   async (req, res, next) => {
 
     try {
 
-      const user =
-        await verifyUserService(
+      const result =
+        await adminAddUserToIddirService(
           req.user,
-          req.params.id,
           req.body
         );
 
-      res.status(200).json({
+      res.status(201).json({
         success: true,
 
         message:
-          "User verification status updated",
+          "User added to Iddir successfully",
 
-        data: user,
+        data: result,
       });
 
     } catch (error) {
@@ -230,27 +123,27 @@ export const verifyUser =
   };
 
 
-// ROLE
+// REMOVE USER FROM IDDIR
 
-export const updateUserRole =
+export const adminRemoveUserFromIddir =
   async (req, res, next) => {
 
     try {
 
-      const user =
-        await updateUserRoleService(
+      const result =
+        await adminRemoveUserFromIddirService(
           req.user,
-          req.params.id,
-          req.body
+          req.params.iddirId,
+          req.params.userId
         );
 
       res.status(200).json({
         success: true,
 
         message:
-          "User role updated successfully",
+          "User removed from Iddir successfully",
 
-        data: user,
+        data: result,
       });
 
     } catch (error) {
@@ -259,44 +152,81 @@ export const updateUserRole =
   };
 
 
-// MOVE USER TO CONDO
+// ── ADMIN EQUBS ──────────────────────────────────────────────────────────────
 
-export const assignUserCondo =
-  async (req, res, next) => {
+export const getAdminEqubs = async (req, res, next) => {
+  try {
+    const result = await getAdminEqubsService(req.user, req.query);
 
-    try {
-
-      const {
-        condoId,
-      } = req.body;
-
-
-      if (!condoId) {
-        throw new AppError(
-          "condoId is required",
-          400
-        );
-      }
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
-      const user =
-        await assignUserCondoService(
-          req.user,
-          req.params.id,
-          condoId
-        );
+// ── ADMIN IDDIRS ─────────────────────────────────────────────────────────────
+
+export const getAdminIddirs = async (req, res, next) => {
+  try {
+    const result = await getAdminIddirsService(req.user, req.query);
+
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
-      res.status(200).json({
-        success: true,
+// ── ADMIN PAYMENTS ───────────────────────────────────────────────────────────
 
-        message:
-          "User assigned to condominium successfully",
+export const getAdminPayments = async (req, res, next) => {
+  try {
+    const result = await getAdminPaymentsService(req.user, req.query);
 
-        data: user,
-      });
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    } catch (error) {
-      next(error);
-    }
-  };
+
+// ── ADMIN TRANSACTIONS ───────────────────────────────────────────────────────
+
+export const getAdminTransactions = async (req, res, next) => {
+  try {
+    const result = await getAdminTransactionsService(req.user, req.query);
+
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ── ADMIN SERVICE FEES ───────────────────────────────────────────────────────
+
+export const getAdminServiceFees = async (req, res, next) => {
+  try {
+    const result = await getAdminServiceFeesService(req.user, req.query);
+
+    res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -18,7 +18,6 @@ export const adminUserSelect = {
   profilePhoto: true,
 
   fan: true,
-
   revenue: true,
 
   frontId: true,
@@ -30,9 +29,6 @@ export const adminUserSelect = {
 
   registerDate: true,
   dueDate: true,
-
-  privacySettings: true,
-
   createdAt: true,
   updatedAt: true,
 

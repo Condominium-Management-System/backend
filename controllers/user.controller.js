@@ -1,209 +1,285 @@
-import AppError from "../errorhandler/AppError.js";
+import asyncHandler from "../utils/asyncHandler.js";
 
 import {
-  getAllUsersService,
+  getUsersService,
+  searchUsersService,
   getUserByIdService,
   getUserProfileService,
   verifyUserService,
   updateUserRoleService,
   updateUserByAdminService,
-  deleteUserService
+  deleteUserService,
+  restoreUserService
 } from "../services/user.service.js";
 
 
-// GET ALL USERS
 
-export const getAllUsers = async (
-  req,
-  res,
-  next
-) => {
+// GET ALL USERS BY CONDOMINIUM
 
-  try {
+
+export const getAllUsers = asyncHandler(
+  async (req, res) => {
 
     const users =
-      await getAllUsersService({
-        condoId: req.query.condoId,
-        role: req.query.role,
-        isVerified:
-          req.query.isVerified !== undefined
-            ? req.query.isVerified === "true"
-            : undefined
-      });
+      await getUsersService(
+        req.params.condoId || null,
+        req.user,
+        {
+          role:
+            req.query.role,
+
+          isVerified:
+            req.query.isVerified !== undefined
+              ? req.query.isVerified === "true"
+              : undefined,
+
+          block:
+            req.query.block,
+
+          roomNo:
+            req.query.roomNo
+        }
+      );
 
     res.status(200).json({
       success: true,
+      count: users.length,
       data: users
     });
-
-  } catch (error) {
-    next(error);
   }
-};
+);
+
+
+
+// SEARCH USERS BY CONDOMINIUM
+
+
+export const searchUsers = asyncHandler(
+  async (req, res) => {
+
+    const users =
+      await searchUsersService(
+        req.query.search,
+        req.params.condoId || null,
+        req.user
+      );
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  }
+);
+
 
 
 // GET USER BY ID
 
-export const getUserById = async (
-  req,
-  res,
-  next
-) => {
 
-  try {
+export const getUserById = asyncHandler(
+  async (req, res) => {
 
     const user =
       await getUserByIdService(
-        req.params.id
+        req.params.condoId || null,
+        req.params.userId,
+        req.user
       );
 
     res.status(200).json({
       success: true,
       data: user
     });
-
-  } catch (error) {
-    next(error);
   }
-};
+);
 
 
-// VIEW PROFILE
+// PUBLIC USER PROFILE
 
-export const getUserProfile = async (
-  req,
-  res,
-  next
-) => {
 
-  try {
+export const getUserProfile = asyncHandler(
+  async (req, res) => {
+
+    const {
+      userId
+    } = req.params;
+
 
     const user =
       await getUserProfileService(
-        req.params.id,
+        userId,
         req.user
       );
+
 
     res.status(200).json({
       success: true,
       data: user
     });
 
-  } catch (error) {
-    next(error);
   }
-};
+);
 
 
-// VERIFY USER
 
-export const verifyUser = async (
-  req,
-  res,
-  next
-) => {
+// vERIFY USER
 
-  try {
+
+export const verifyUser = asyncHandler(
+  async (req, res) => {
+
+    const {
+      condoId,
+      userId
+    } = req.params;
+
 
     const user =
       await verifyUserService(
-        req.params.id,
+        condoId,
+        userId,
         req.body,
         req.user
       );
 
+
     res.status(200).json({
       success: true,
-      message: "User verification updated",
+      message:
+        "User verification updated",
       data: user
     });
 
-  } catch (error) {
-    next(error);
   }
-};
+);
 
 
-// UPDATE ROLE
 
-export const updateUserRole = async (
-  req,
-  res,
-  next
-) => {
+// UPDATE USER ROLE
 
-  try {
+
+export const updateUserRole = asyncHandler(
+  async (req, res) => {
+
+    const {
+      condoId,
+      userId
+    } = req.params;
+
 
     const user =
       await updateUserRoleService(
-        req.params.id,
-        req.body
-      );
-
-    res.status(200).json({
-      success: true,
-      message: "User role updated successfully",
-      data: user
-    });
-
-  } catch (error) {
-    next(error);
-  }
-};
-
-
-// ADMIN UPDATE USER
-
-export const updateUserByAdmin = async (
-  req,
-  res,
-  next
-) => {
-
-  try {
-
-    const user =
-      await updateUserByAdminService(
-        req.params.id,
+        condoId,
+        userId,
         req.body,
         req.user
       );
 
+
     res.status(200).json({
       success: true,
-      message: "User updated successfully",
+      message:
+        "User role updated successfully",
       data: user
     });
 
-  } catch (error) {
-    next(error);
   }
-};
+);
+
+
+
+// UPDATE USER BY ADMIN
+
+
+export const updateUserByAdmin = asyncHandler(
+  async (req, res) => {
+
+    const {
+      condoId,
+      userId
+    } = req.params;
+
+
+    const user =
+      await updateUserByAdminService(
+        condoId,
+        userId,
+        req.body,
+        req.user
+      );
+
+
+    res.status(200).json({
+      success: true,
+      message:
+        "User updated successfully",
+      data: user
+    });
+
+  }
+);
+
 
 
 // DELETE USER
 
-export const deleteUser = async (
-  req,
-  res,
-  next
-) => {
 
-  try {
+export const deleteUser = asyncHandler(
+  async (req, res) => {
+
+    const {
+      condoId,
+      userId
+    } = req.params;
+
 
     const result =
       await deleteUserService(
-        req.params.id,
+        condoId,
+        userId,
         req.user
       );
 
+
     res.status(200).json({
       success: true,
-      message: "User deleted successfully",
+      message:
+        "User deleted successfully",
       data: result
     });
 
-  } catch (error) {
-    next(error);
   }
-};
+);
+
+
+
+// RESTORE USER
+
+
+export const restoreUser = asyncHandler(
+  async (req, res) => {
+
+    const {
+      condoId,
+      userId
+    } = req.params;
+
+
+    const user =
+      await restoreUserService(
+        condoId,
+        userId,
+        req.user
+      );
+
+
+    res.status(200).json({
+      success: true,
+      message:
+        "User restored successfully",
+      data: user
+    });
+
+  }
+);

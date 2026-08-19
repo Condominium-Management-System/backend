@@ -1,56 +1,170 @@
 import AppError from "../errorhandler/AppError.js";
+
 import { prisma } from "../config/prisma.config.js";
 
 import {
   createIddirValidation,
   updateIddirValidation,
 } from "../inputValidation/iddir.validation.js";
-export const createIddirService = async (payload, requester) => {
 
-  const {
-    error,
-    value,
-  } = createIddirValidation.validate(payload);
+const publicIddirSelect = {
+  id: true,
+  name: true,
+  startedDate: true,
+  contributionAmount: true,
+  status: true,
+  noMembers: true,
 
-  if (error) {
+  condo: {
+    select: {
+      id: true,
+      condoCode: true,
+      condoName: true,
+    },
+  },
+};
+
+const adminIddirInclude = {
+  condo: {
+    select: {
+      id: true,
+      condoCode: true,
+      condoName: true,
+      address: true,
+      city: true,
+    },
+  },
+
+  createdBy: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      role: true,
+    },
+  },
+
+  members: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phoneNumber: true,
+          block: true,
+          roomNo: true,
+        },
+      },
+    },
+  },
+
+  payments: {
+    orderBy: {
+      createdAt: "desc",
+    },
+  },
+
+  _count: {
+    select: {
+      members: true,
+      payments: true,
+    },
+  },
+};
+
+const adminIddirSelect = {
+  id: true,
+  condoId: true,
+  name: true,
+  startedDate: true,
+  contributionAmount: true,
+  status: true,
+  noMembers: true,
+  createdAt: true,
+  updatedAt: true,
+
+  condo: {
+    select: {
+      id: true,
+      condoCode: true,
+      condoName: true,
+      address: true,
+      city: true,
+    },
+  },
+
+  createdBy: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      role: true,
+    },
+  },
+
+  _count: {
+    select: {
+      members: true,
+      payments: true,
+    },
+  },
+};
+
+const checkAdminAccess = (
+  requester,
+  condoId = null
+) => {
+  if (!requester) {
     throw new AppError(
-      error.details[0].message,
-      400
+      "Authentication required",
+      401
     );
   }
 
-
-  // Only super_admin or condo_admin
   if (
     requester.role !== "super_admin" &&
     requester.role !== "condo_admin"
   ) {
     throw new AppError(
-      "You are not authorized to create an Iddir",
+      "You are not authorized to manage Iddirs",
       403
     );
   }
 
+  if (requester.role === "condo_admin") {
+    if (!requester.condoId) {
+      throw new AppError(
+        "Your account is not assigned to a condominium",
+        403
+      );
+    }
 
-  // Condo admin can only create Iddir
-  // inside their own condominium
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== value.condoId
-  ) {
-    throw new AppError(
-      "You can only create Iddir for your own condominium",
-      403
-    );
+    if (
+      condoId &&
+      String(requester.condoId) !==
+        String(condoId)
+    ) {
+      throw new AppError(
+        "You can only access Iddirs from your own condominium",
+        403
+      );
+    }
   }
+};
 
-
-  // Check condo exists
-  const condo = await prisma.condo.findUnique({
-    where: {
-      id: value.condoId,
-    },
-  });
+const validateCondo = async (
+  condoId
+) => {
+  const condo =
+    await prisma.condo.findFirst({
+      where: {
+        id: String(condoId),
+        deletedAt: null,
+      },
+    });
 
   if (!condo) {
     throw new AppError(
@@ -59,238 +173,27 @@ export const createIddirService = async (payload, requester) => {
     );
   }
 
-
-  // Check duplicate Iddir name
-  const existingIddir = await prisma.iddir.findFirst({
-    where: {
-      condoId: value.condoId,
-      name: value.name,
-      deletedAt: null,
-    },
-  });
-
-  if (existingIddir) {
-    throw new AppError(
-      "An Iddir with this name already exists in this condominium",
-      409
-    );
-  }
-
-
-  const iddir = await prisma.iddir.create({
-    data: {
-      condoId: value.condoId,
-
-      createdById: requester.id,
-
-      name: value.name,
-
-      startedDate: value.startedDate,
-
-      contributionAmount: value.contributionAmount,
-
-      status: "active",
-
-      noMembers: 0,
-    },
-
-    include: {
-      condo: true,
-
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-
-      _count: {
-        select: {
-          members: true,
-          payments: true,
-        },
-      },
-    },
-  });
-
-
-  return iddir;
+  return condo;
 };
 
-export const getIddirsService = async (requester) => {
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to view Iddirs",
-      403
-    );
-  }
-
-
-  const where = {
-    deletedAt: null,
-  };
-
-
-  // Condo admin sees only their condo
-  if (requester.role === "condo_admin") {
-
-    where.condoId = requester.condoId;
-
-  }
-
-
-  const iddirs = await prisma.iddir.findMany({
-
-    where,
-
-    include: {
-      condo: {
-        select: {
-          id: true,
-          condoCode: true,
-          condoName: true,
-        },
-      },
-
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-
-      members: {
-        select: {
-          id: true,
-          userId: true,
-          status: true,
-          joinedAt: true,
-          totalPaid: true,
-        },
-      },
-
-      _count: {
-        select: {
-          members: true,
-          payments: true,
-        },
-      },
-    },
-
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-
-  return iddirs;
-};
-
-
-export const getIddirByIdService = async (
-  id,
-  requester
-) => {
-
-  const iddir = await prisma.iddir.findFirst({
-
-    where: {
-      id,
-      deletedAt: null,
-    },
-
-    include: {
-
-      condo: {
-        select: {
-          id: true,
-          condoCode: true,
-          condoName: true,
-          address: true,
-        },
-      },
-
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              block: true,
-              roomNo: true,
-            },
-          },
-        },
-      },
-
-      payments: {
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-
-      _count: {
-        select: {
-          members: true,
-          payments: true,
-        },
-      },
-    },
-  });
-
-
-  if (!iddir) {
-    throw new AppError(
-      "Iddir not found",
-      404
-    );
-  }
-
-
-  // Condo admin access check
-  if (
-    requester.role === "condo_admin" &&
-    iddir.condoId !== requester.condoId
-  ) {
-    throw new AppError(
-      "You are not authorized to access this Iddir",
-      403
-    );
-  }
-
-
-  return iddir;
-};
-
-export const updateIddirService = async (
-  id,
+// Create Iddir
+export const createIddirService = async (
+  condoId,
   payload,
   requester
 ) => {
+  checkAdminAccess(
+    requester,
+    condoId
+  );
 
   const {
     error,
     value,
-  } = updateIddirValidation.validate(payload);
+  } = createIddirValidation.validate({
+    ...payload,
+    condoId,
+  });
 
   if (error) {
     throw new AppError(
@@ -299,216 +202,525 @@ export const updateIddirService = async (
     );
   }
 
+  await validateCondo(
+    condoId
+  );
 
-  const existingIddir = await prisma.iddir.findFirst({
-    where: {
-      id,
-      deletedAt: null,
-    },
-  });
-
-
-  if (!existingIddir) {
-    throw new AppError(
-      "Iddir not found",
-      404
-    );
-  }
-
-
-  // Authorization
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to update this Iddir",
-      403
-    );
-  }
-
-
-  // Condo admin can only update own condo
-  if (
-    requester.role === "condo_admin" &&
-    existingIddir.condoId !== requester.condoId
-  ) {
-    throw new AppError(
-      "You can only update Iddir from your own condominium",
-      403
-    );
-  }
-
-
-  // If changing condo
-  if (value.condoId) {
-
-    if (
-      requester.role === "condo_admin" &&
-      value.condoId !== requester.condoId
-    ) {
-      throw new AppError(
-        "You cannot move an Iddir to another condominium",
-        403
-      );
-    }
-
-
-    const condo = await prisma.condo.findUnique({
+  const existingIddir =
+    await prisma.iddir.findFirst({
       where: {
-        id: value.condoId,
-      },
-    });
-
-
-    if (!condo) {
-      throw new AppError(
-        "Condominium not found",
-        404
-      );
-    }
-  }
-
-
-  // Check duplicate name
-  if (value.name) {
-
-    const duplicate = await prisma.iddir.findFirst({
-
-      where: {
-        condoId: value.condoId ?? existingIddir.condoId,
-
+        condoId: String(condoId),
         name: value.name,
-
-        id: {
-          not: id,
-        },
-
         deletedAt: null,
       },
     });
 
+  if (existingIddir) {
+    throw new AppError(
+      "An Iddir with this name already exists in this condominium",
+      409
+    );
+  }
 
-    if (duplicate) {
+  return prisma.iddir.create({
+    data: {
+      condoId: String(condoId),
+      createdById: requester.id,
+      name: value.name,
+      startedDate: value.startedDate,
+      contributionAmount:
+        value.contributionAmount,
+      status: "active",
+      noMembers: 0,
+    },
+    select: adminIddirSelect,
+  });
+};
+
+// Get public Iddirs
+export const getPublicIddirsService =
+  async ({
+    condoId,
+    status,
+    search,
+  } = {}) => {
+    const where = {
+      deletedAt: null,
+    };
+
+    if (condoId) {
+      await validateCondo(
+        condoId
+      );
+
+      where.condoId =
+        String(condoId);
+    }
+
+    if (status) {
+      if (
+        ![
+          "active",
+          "inactive",
+        ].includes(status)
+      ) {
+        throw new AppError(
+          "Invalid Iddir status",
+          400
+        );
+      }
+
+      where.status = status;
+    }
+
+    if (
+      search &&
+      search.trim()
+    ) {
+      const keyword =
+        search.trim();
+
+      where.OR = [
+        {
+          name: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+        {
+          condo: {
+            condoCode: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          condo: {
+            condoName: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    return prisma.iddir.findMany({
+      where,
+      select: publicIddirSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  };
+
+// Get public Iddir by id
+export const getPublicIddirByIdService =
+  async (id) => {
+    const iddir =
+      await prisma.iddir.findFirst({
+        where: {
+          id: String(id),
+          deletedAt: null,
+        },
+        select: publicIddirSelect,
+      });
+
+    if (!iddir) {
       throw new AppError(
-        "Another Iddir with this name already exists",
-        409
+        "Iddir not found",
+        404
       );
     }
+
+    return iddir;
+  };
+
+// Get admin Iddirs
+export const getIddirsService = async ({
+  condoId = null,
+  requester,
+  query = {},
+}) => {
+  checkAdminAccess(
+    requester,
+    condoId
+  );
+
+  const where = {
+    deletedAt: null,
+  };
+
+  if (condoId) {
+    await validateCondo(
+      condoId
+    );
+
+    where.condoId =
+      String(condoId);
+  } else if (
+    requester.role === "condo_admin"
+  ) {
+    where.condoId =
+      String(requester.condoId);
   }
 
+  if (query.status) {
+    if (
+      ![
+        "active",
+        "inactive",
+      ].includes(query.status)
+    ) {
+      throw new AppError(
+        "Invalid Iddir status",
+        400
+      );
+    }
 
-  const updatedIddir = await prisma.iddir.update({
+    where.status =
+      query.status;
+  }
 
-    where: {
-      id,
-    },
-
-    data: value,
-
-    include: {
-
-      condo: {
-        select: {
-          id: true,
-          condoCode: true,
-          condoName: true,
-        },
-      },
-
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-
-      _count: {
-        select: {
-          members: true,
-          payments: true,
-        },
-      },
+  return prisma.iddir.findMany({
+    where,
+    select: adminIddirSelect,
+    orderBy: {
+      createdAt: "desc",
     },
   });
-
-
-  return updatedIddir;
 };
 
-export const deleteIddirService = async (
-  id,
-  requester
-) => {
+// Search admin Iddirs
+export const searchIddirsService =
+  async ({
+    condoId = null,
+    requester,
+    search,
+    status,
+  }) => {
+    checkAdminAccess(
+      requester,
+      condoId
+    );
 
-  const iddir = await prisma.iddir.findFirst({
-    where: {
-      id,
+    const where = {
       deletedAt: null,
-    },
-  });
+    };
 
+    if (condoId) {
+      await validateCondo(
+        condoId
+      );
 
-  if (!iddir) {
-    throw new AppError(
-      "Iddir not found",
-      404
+      where.condoId =
+        String(condoId);
+    } else if (
+      requester.role === "condo_admin"
+    ) {
+      where.condoId =
+        String(requester.condoId);
+    }
+
+    if (status) {
+      if (
+        ![
+          "active",
+          "inactive",
+        ].includes(status)
+      ) {
+        throw new AppError(
+          "Invalid Iddir status",
+          400
+        );
+      }
+
+      where.status = status;
+    }
+
+    if (
+      search &&
+      search.trim()
+    ) {
+      const keyword =
+        search.trim();
+
+      where.OR = [
+        {
+          name: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+        {
+          condo: {
+            condoCode: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          condo: {
+            condoName: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          createdBy: {
+            fullName: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          createdBy: {
+            email: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    return prisma.iddir.findMany({
+      where,
+      select: adminIddirSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  };
+
+// Get admin Iddir by id
+export const getIddirByIdService =
+  async (
+    id,
+    requester
+  ) => {
+    checkAdminAccess(
+      requester
     );
-  }
 
+    const iddir =
+      await prisma.iddir.findFirst({
+        where: {
+          id: String(id),
+          deletedAt: null,
+        },
+        include:
+          adminIddirInclude,
+      });
 
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to delete this Iddir",
-      403
+    if (!iddir) {
+      throw new AppError(
+        "Iddir not found",
+        404
+      );
+    }
+
+    if (
+      requester.role === "condo_admin" &&
+      String(iddir.condoId) !==
+        String(requester.condoId)
+    ) {
+      throw new AppError(
+        "You are not authorized to access this Iddir",
+        403
+      );
+    }
+
+    return iddir;
+  };
+
+// Update Iddir
+export const updateIddirService =
+  async (
+    condoId,
+    id,
+    payload,
+    requester
+  ) => {
+    checkAdminAccess(
+      requester,
+      condoId
     );
-  }
 
-
-  if (
-    requester.role === "condo_admin" &&
-    iddir.condoId !== requester.condoId
-  ) {
-    throw new AppError(
-      "You can only delete Iddir from your own condominium",
-      403
+    const {
+      error,
+      value,
+    } = updateIddirValidation.validate(
+      payload
     );
-  }
 
+    if (error) {
+      throw new AppError(
+        error.details[0].message,
+        400
+      );
+    }
 
-  // Don't delete an Iddir that has members
-  const memberCount = await prisma.iddirMember.count({
-    where: {
-      iddirId: id,
-    },
-  });
+    const existingIddir =
+      await prisma.iddir.findFirst({
+        where: {
+          id: String(id),
+          deletedAt: null,
+        },
+      });
 
+    if (!existingIddir) {
+      throw new AppError(
+        "Iddir not found",
+        404
+      );
+    }
 
-  if (memberCount > 0) {
-    throw new AppError(
-      "Cannot delete an Iddir that has members",
-      400
+    if (
+      condoId &&
+      String(existingIddir.condoId) !==
+        String(condoId)
+    ) {
+      throw new AppError(
+        "Iddir does not belong to this condominium",
+        403
+      );
+    }
+
+    if (
+      requester.role === "condo_admin" &&
+      String(existingIddir.condoId) !==
+        String(requester.condoId)
+    ) {
+      throw new AppError(
+        "You can only update Iddirs from your own condominium",
+        403
+      );
+    }
+
+    if (value.condoId) {
+      if (
+        requester.role === "condo_admin" &&
+        String(value.condoId) !==
+          String(requester.condoId)
+      ) {
+        throw new AppError(
+          "You cannot move an Iddir to another condominium",
+          403
+        );
+      }
+
+      await validateCondo(
+        value.condoId
+      );
+    }
+
+    if (value.name) {
+      const duplicate =
+        await prisma.iddir.findFirst({
+          where: {
+            condoId:
+              value.condoId ??
+              existingIddir.condoId,
+            name: value.name,
+            id: {
+              not: String(id),
+            },
+            deletedAt: null,
+          },
+        });
+
+      if (duplicate) {
+        throw new AppError(
+          "Another Iddir with this name already exists",
+          409
+        );
+      }
+    }
+
+    return prisma.iddir.update({
+      where: {
+        id: String(id),
+      },
+      data: value,
+      select: adminIddirSelect,
+    });
+  };
+
+// Delete Iddir
+export const deleteIddirService =
+  async (
+    condoId,
+    id,
+    requester
+  ) => {
+    checkAdminAccess(
+      requester,
+      condoId
     );
-  }
 
+    const iddir =
+      await prisma.iddir.findFirst({
+        where: {
+          id: String(id),
+          deletedAt: null,
+        },
+      });
 
-  const deletedIddir = await prisma.iddir.update({
+    if (!iddir) {
+      throw new AppError(
+        "Iddir not found",
+        404
+      );
+    }
 
-    where: {
-      id,
-    },
+    if (
+      condoId &&
+      String(iddir.condoId) !==
+        String(condoId)
+    ) {
+      throw new AppError(
+        "Iddir does not belong to this condominium",
+        403
+      );
+    }
 
-    data: {
-      deletedAt: new Date(),
-      status: "inactive",
-    },
-  });
+    if (
+      requester.role === "condo_admin" &&
+      String(iddir.condoId) !==
+        String(requester.condoId)
+    ) {
+      throw new AppError(
+        "You can only delete Iddirs from your own condominium",
+        403
+      );
+    }
 
+    const memberCount =
+      await prisma.iddirMember.count({
+        where: {
+          iddirId: String(id),
+        },
+      });
 
-  return deletedIddir;
-};
+    if (memberCount > 0) {
+      throw new AppError(
+        "Cannot delete an Iddir that has members",
+        400
+      );
+    }
+
+    return prisma.iddir.update({
+      where: {
+        id: String(id),
+      },
+      data: {
+        deletedAt: new Date(),
+        status: "inactive",
+      },
+    });
+  };

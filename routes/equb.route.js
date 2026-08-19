@@ -4,97 +4,122 @@ import {
   createEqubController,
   getAllEqubsController,
   getEqubByIdController,
+  getPublicEqubsController,
+  getPublicEqubByIdController,
+  searchEqubsController,
   updateEqubController,
   deleteEqubController,
-  addEqubMemberController,
-  removeEqubMemberController,
-  updateEqubMemberController,
-  getEqubMembersController,
-  selectEqubWinnerController,
 } from "../controllers/equb.controller.js";
 
-import {authenticate} from "../middleware/auth.middleware.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
 import { Roles } from "../config/roles.config.js";
+
 const router = express.Router();
 
 
-// EQUB CRUD
-
-router.post(
-  "/",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  createEqubController
+// PUBLIC / USER
+router.get(
+  "/:condoId/equbs/public",
+  getPublicEqubsController
 );
 
+
+// PUBLIC / USER
+router.get(
+  "/:condoId/equbs/:id/public",
+  getPublicEqubByIdController
+);
+
+
+router.use(authenticate);
+
+
+// ADMIN GET ALL
 router.get(
   "/",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
   getAllEqubsController
 );
 
+
+// ADMIN GET ALL BY CONDO
+router.get(
+  "/:condoId/equbs",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getAllEqubsController
+);
+
+
+// ADMIN SEARCH ALL
+router.get(
+  "/search",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  searchEqubsController
+);
+
+
+// ADMIN SEARCH BY CONDO
+router.get(
+  "/:condoId/equbs/search",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  searchEqubsController
+);
+
+
+// ADMIN GET ONE
 router.get(
   "/:id",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
   getEqubByIdController
 );
 
+
+// ADMIN CREATE
+router.post(
+  "/:condoId/equbs",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  createEqubController
+);
+
+
+// ADMIN UPDATE
 router.patch(
-  "/:id",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
+  "/:condoId/equbs/:id",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
   updateEqubController
 );
 
+
+// ADMIN DELETE
 router.delete(
-  "/:id",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
+  "/:condoId/equbs/:id",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
   deleteEqubController
-);
-
-
-// MEMBERS
-
-router.post(
-  "/:id/members",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  addEqubMemberController
-);
-
-router.get(
-  "/:id/members",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  getEqubMembersController
-);
-
-router.patch(
-  "/:id/members/:userId",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  updateEqubMemberController
-);
-
-router.delete(
-  "/:id/members/:userId",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  removeEqubMemberController
-);
-
-
-// WINNER
-
-router.post(
-  "/:id/select-winner",
-  authenticate,
-  authorizeRoles(Roles.ADMIN, Roles.SUPER_ADMIN),
-  selectEqubWinnerController
 );
 
 
