@@ -6,12 +6,160 @@ import {
   updateIddirMemberValidation,
   iddirMemberIdValidation,
   iddirIdValidation,
-} from "../inputValidation/iddirMemeber.validation.js"
+} from "../inputValidation/iddirMemeber.validation.js";
+
+const allowedRoles = [
+  "super_admin",
+  "condo_admin",
+];
+
+const memberSelect = {
+  id: true,
+  userId: true,
+  iddirId: true,
+  status: true,
+  joinedAt: true,
+  leftAt: true,
+  totalPaid: true,
+
+  user: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      role: true,
+      condoId: true,
+      condoCode: true,
+      block: true,
+      roomNo: true,
+      profilePhoto: true,
+      isInIddir: true,
+    },
+  },
+
+  iddir: {
+    select: {
+      id: true,
+      name: true,
+      condoId: true,
+      status: true,
+      contributionAmount: true,
+      startedDate: true,
+      noMembers: true,
+
+      condo: {
+        select: {
+          id: true,
+          condoCode: true,
+          condoName: true,
+        },
+      },
+    },
+  },
+};
+
+const checkAdminRole = (requester) => {
+  if (
+    !requester ||
+    !allowedRoles.includes(requester.role)
+  ) {
+    throw new AppError(
+      "You are not authorized to manage Iddir members",
+      403
+    );
+  }
+};
+
+const validateCondoAccess = (
+  requester,
+  condoId
+) => {
+  checkAdminRole(requester);
+
+  if (
+    requester.role === "condo_admin" &&
+    condoId &&
+    String(requester.condoId) !== String(condoId)
+  ) {
+    throw new AppError(
+      "You can only access members from your own condominium",
+      403
+    );
+  }
+};
+
+const validateCondoExists = async (condoId) => {
+  const condo = await prisma.condo.findFirst({
+    where: {
+      id: String(condoId),
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      condoCode: true,
+      condoName: true,
+    },
+  });
+
+  if (!condo) {
+    throw new AppError(
+      "Condominium not found",
+      404
+    );
+  }
+
+  return condo;
+};
+
+const getIddirWithAccess = async (
+  iddirId,
+  requester,
+  condoId = null
+) => {
+  const iddir = await prisma.iddir.findFirst({
+    where: {
+      id: String(iddirId),
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      condoId: true,
+      name: true,
+      status: true,
+    },
+  });
+
+  if (!iddir) {
+    throw new AppError(
+      "Iddir not found",
+      404
+    );
+  }
+
+  if (
+    condoId &&
+    String(iddir.condoId) !== String(condoId)
+  ) {
+    throw new AppError(
+      "Iddir does not belong to this condominium",
+      403
+    );
+  }
+
+  validateCondoAccess(
+    requester,
+    iddir.condoId
+  );
+
+  return iddir;
+};
+
+// Add Iddir member
 export const addIddirMemberService = async (
   payload,
   requester
 ) => {
-
   const {
     error,
     value,
@@ -24,25 +172,7 @@ export const addIddirMemberService = async (
     );
   }
 
-
-  /*
-   * Authorization
-   */
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to add users to Iddir",
-      403
-    );
-  }
-
-
-  /*
-   * Find Iddir
-   */
+  checkAdminRole(requester);
 
   const iddir = await prisma.iddir.findFirst({
     where: {
@@ -58,43 +188,18 @@ export const addIddirMemberService = async (
     );
   }
 
-
-  /*
-   * Condo admin can only manage
-   * his own condominium
-   */
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== iddir.condoId
-  ) {
-    throw new AppError(
-      "You can only manage members of your own condominium",
-      403
-    );
-  }
-
-
-  /*
-   * Iddir must be active
-   */
-
-  if (iddir.status !== "active") {
-    throw new AppError(
-      "Cannot add a member to an inactive Iddir",
-      400
-    );
-  }
-
-
-  /*
-   * Find user
-   */
-
   const user = await prisma.user.findFirst({
     where: {
       id: value.userId,
       deletedAt: null,
+    },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      role: true,
+      condoId: true,
     },
   });
 
@@ -105,24 +210,28 @@ export const addIddirMemberService = async (
     );
   }
 
-
-  /*
-   * User must belong to same condo
-   */
-
-  if (user.condoId !== iddir.condoId) {
+  // Condo admin can only manage own condo
+  if (
+    requester.role === "condo_admin" &&
+    String(requester.condoId) !==
+      String(iddir.condoId)
+  ) {
     throw new AppError(
-      "User does not belong to this condominium",
-      400
+      "You can only manage members of your own condominium",
+      403
     );
   }
 
-
-  /*
-   * Don't allow super admin,
-   * guard or condo admin as Iddir member
-   * if your business rule is resident-only.
-   */
+  // User and Iddir must belong to same condo
+  if (
+    String(user.condoId) !==
+    String(iddir.condoId)
+  ) {
+    throw new AppError(
+      "User and Iddir must belong to the same condominium",
+      400
+    );
+  }
 
   if (user.role !== "resident") {
     throw new AppError(
@@ -131,10 +240,12 @@ export const addIddirMemberService = async (
     );
   }
 
-
-  /*
-   * Check existing membership
-   */
+  if (iddir.status !== "active") {
+    throw new AppError(
+      "Cannot add a member to an inactive Iddir",
+      400
+    );
+  }
 
   const existingMember =
     await prisma.iddirMember.findUnique({
@@ -146,13 +257,7 @@ export const addIddirMemberService = async (
       },
     });
 
-
-  /*
-   * If membership already exists
-   */
-
   if (existingMember) {
-
     if (
       existingMember.status === "active"
     ) {
@@ -162,96 +267,48 @@ export const addIddirMemberService = async (
       );
     }
 
-
-    /*
-     * Reactivate inactive/suspended member
-     */
-
-    const member = await prisma.$transaction(
-      async (tx) => {
-
-        const updatedMember =
-          await tx.iddirMember.update({
-
-            where: {
-              id: existingMember.id,
-            },
-
-            data: {
-              status: "active",
-              joinedAt: new Date(),
-              leftAt: null,
-            },
-
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                  phoneNumber: true,
-                  role: true,
-                  condoId: true,
-                  block: true,
-                  roomNo: true,
-                  isInIddir: true,
-                },
+    const member =
+      await prisma.$transaction(
+        async (tx) => {
+          const updatedMember =
+            await tx.iddirMember.update({
+              where: {
+                id: existingMember.id,
               },
+              data: {
+                status: "active",
+                joinedAt: new Date(),
+                leftAt: null,
+              },
+              select: memberSelect,
+            });
 
-              iddir: {
-                select: {
-                  id: true,
-                  name: true,
-                  condoId: true,
-                  contributionAmount: true,
-                },
+          await tx.user.update({
+            where: {
+              id: value.userId,
+            },
+            data: {
+              isInIddir: true,
+            },
+          });
+
+          await tx.iddir.update({
+            where: {
+              id: value.iddirId,
+            },
+            data: {
+              noMembers: {
+                increment: 1,
               },
             },
           });
 
-
-        await tx.user.update({
-          where: {
-            id: value.userId,
-          },
-
-          data: {
-            isInIddir: true,
-          },
-        });
-
-
-        /*
-         * Only increment if the old
-         * membership wasn't active
-         */
-
-        await tx.iddir.update({
-          where: {
-            id: value.iddirId,
-          },
-
-          data: {
-            noMembers: {
-              increment: 1,
-            },
-          },
-        });
-
-
-        return updatedMember;
-      }
-    );
-
+          return updatedMember;
+        }
+      );
 
     return member;
   }
-
-
-  /*
-   * Check if user is already active
-   * in another Iddir.
-   */
 
   const activeMembership =
     await prisma.iddirMember.findFirst({
@@ -264,7 +321,6 @@ export const addIddirMemberService = async (
       },
     });
 
-
   if (activeMembership) {
     throw new AppError(
       "User is already an active member of another Iddir",
@@ -272,487 +328,544 @@ export const addIddirMemberService = async (
     );
   }
 
-
-  /*
-   * Create membership
-   */
-
-  const member = await prisma.$transaction(
-    async (tx) => {
-
-      const newMember =
-        await tx.iddirMember.create({
-
-          data: {
-            iddirId: value.iddirId,
-            userId: value.userId,
-            status: "active",
-          },
-
-          include: {
-
-            user: {
-              select: {
-                id: true,
-                fullName: true,
-                email: true,
-                phoneNumber: true,
-                role: true,
-                condoId: true,
-                block: true,
-                roomNo: true,
-                isInIddir: true,
-              },
+  const member =
+    await prisma.$transaction(
+      async (tx) => {
+        const newMember =
+          await tx.iddirMember.create({
+            data: {
+              iddirId: value.iddirId,
+              userId: value.userId,
+              status: "active",
             },
+            select: memberSelect,
+          });
 
-            iddir: {
-              select: {
-                id: true,
-                name: true,
-                condoId: true,
-                contributionAmount: true,
-              },
+        await tx.user.update({
+          where: {
+            id: value.userId,
+          },
+          data: {
+            isInIddir: true,
+          },
+        });
+
+        await tx.iddir.update({
+          where: {
+            id: value.iddirId,
+          },
+          data: {
+            noMembers: {
+              increment: 1,
             },
           },
         });
 
-
-      /*
-       * Update User
-       */
-
-      await tx.user.update({
-        where: {
-          id: value.userId,
-        },
-
-        data: {
-          isInIddir: true,
-        },
-      });
-
-
-      /*
-       * Update Iddir member count
-       */
-
-      await tx.iddir.update({
-        where: {
-          id: value.iddirId,
-        },
-
-        data: {
-          noMembers: {
-            increment: 1,
-          },
-        },
-      });
-
-
-      return newMember;
-    }
-  );
-
+        return newMember;
+      }
+    );
 
   return member;
 };
 
-export const getIddirMembersService = async (
-  iddirId,
-  requester
-) => {
+// Get Iddir members
+export const getIddirMembersService = async ({
+  condoId = null,
+  iddirId = null,
+  requester,
+}) => {
+  checkAdminRole(requester);
 
-  /*
-   * Validate ID
-   */
+  if (condoId) {
+    await validateCondoExists(condoId);
 
-  const {
-    error,
-    value,
-  } = iddirIdValidation.validate({
-    iddirId,
-  });
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
+    validateCondoAccess(
+      requester,
+      condoId
     );
   }
 
-
-  /*
-   * Authorization
-   */
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to view Iddir members",
-      403
+  if (iddirId) {
+    await getIddirWithAccess(
+      iddirId,
+      requester,
+      condoId
     );
   }
 
-
-  /*
-   * Find Iddir
-   */
-
-  const iddir = await prisma.iddir.findFirst({
-    where: {
-      id: value.iddirId,
+  const where = {
+    iddir: {
       deletedAt: null,
+      ...(condoId
+        ? {
+            condoId: String(condoId),
+          }
+        : {}),
+      ...(iddirId
+        ? {
+            id: String(iddirId),
+          }
+        : {}),
     },
-  });
+  };
 
-  if (!iddir) {
-    throw new AppError(
-      "Iddir not found",
-      404
-    );
+  if (requester.role === "condo_admin") {
+    where.iddir.condoId =
+      String(requester.condoId);
   }
-
-
-  /*
-   * Condo access
-   */
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== iddir.condoId
-  ) {
-    throw new AppError(
-      "You can only view members from your own condominium",
-      403
-    );
-  }
-
-
-  /*
-   * Get members
-   */
 
   const members =
     await prisma.iddirMember.findMany({
-
-      where: {
-        iddirId: value.iddirId,
-      },
-
-      include: {
-
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phoneNumber: true,
-            role: true,
-            condoId: true,
-            condoCode: true,
-            block: true,
-            roomNo: true,
-            profilePhoto: true,
-            isInIddir: true,
-          },
-        },
-
-        iddir: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            contributionAmount: true,
-            startedDate: true,
-            noMembers: true,
-          },
-        },
-      },
-
+      where,
+      select: memberSelect,
       orderBy: {
         joinedAt: "desc",
       },
     });
 
+  return members;
+};
+
+// Search Iddir members
+export const searchIddirMembersService = async ({
+  condoId = null,
+  iddirId = null,
+  search,
+  status,
+  requester,
+}) => {
+  checkAdminRole(requester);
+
+  if (condoId) {
+    await validateCondoExists(condoId);
+
+    validateCondoAccess(
+      requester,
+      condoId
+    );
+  }
+
+  if (iddirId) {
+    await getIddirWithAccess(
+      iddirId,
+      requester,
+      condoId
+    );
+  }
+
+  const where = {
+    iddir: {
+      deletedAt: null,
+    },
+  };
+
+  // Apply condominium restriction
+  if (condoId) {
+    where.iddir.condoId =
+      String(condoId);
+  }
+
+  // Condo admin is always restricted
+  if (requester.role === "condo_admin") {
+    where.iddir.condoId =
+      String(requester.condoId);
+  }
+
+  // Restrict to specific Iddir
+  if (iddirId) {
+    where.iddir.id =
+      String(iddirId);
+  }
+
+  // Filter by member status
+  if (status) {
+    const validStatuses = [
+      "active",
+      "inactive",
+      "suspended",
+    ];
+
+    if (
+      !validStatuses.includes(status)
+    ) {
+      throw new AppError(
+        "Invalid member status",
+        400
+      );
+    }
+
+    where.status = status;
+  }
+
+  if (
+    search &&
+    search.trim()
+  ) {
+    const keyword =
+      search.trim();
+
+    const searchNumber =
+      Number(keyword);
+
+    where.OR = [
+      // Member ID
+      {
+        id: {
+          equals: keyword,
+        },
+      },
+
+      // User ID
+      {
+        userId: {
+          equals: keyword,
+        },
+      },
+
+      // Iddir ID
+      {
+        iddirId: {
+          equals: keyword,
+        },
+      },
+
+      // User
+      {
+        user: {
+          fullName: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      {
+        user: {
+          email: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      {
+        user: {
+          phoneNumber: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      {
+        user: {
+          condoCode: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      {
+        user: {
+          block: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      {
+        user: {
+          roomNo: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      // Iddir
+      {
+        iddir: {
+          name: {
+            contains: keyword,
+            mode: "insensitive",
+          },
+        },
+      },
+
+      // Condo
+      {
+        iddir: {
+          condo: {
+            condoCode: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+      },
+
+      {
+        iddir: {
+          condo: {
+            condoName: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        },
+      },
+
+      {
+        iddir: {
+          condo: {
+            id: {
+              equals: keyword,
+            },
+          },
+        },
+      },
+    ];
+
+    if (
+      Number.isInteger(searchNumber)
+    ) {
+      where.OR.push(
+        {
+          user: {
+            roomNo: {
+              contains: keyword,
+              mode: "insensitive",
+            },
+          },
+        }
+      );
+    }
+
+    const normalized =
+      keyword.toLowerCase();
+
+    if (
+      [
+        "active",
+        "inactive",
+        "suspended",
+      ].includes(normalized)
+    ) {
+      where.OR.push({
+        status: normalized,
+      });
+    }
+  }
+
+  const members =
+    await prisma.iddirMember.findMany({
+      where,
+      select: memberSelect,
+      orderBy: {
+        joinedAt: "desc",
+      },
+    });
 
   return members;
 };
 
-export const getIddirMemberByIdService = async (
-  memberId,
-  requester
-) => {
-
-  const {
-    error,
-    value,
-  } = iddirMemberIdValidation.validate({
-    id: memberId,
-  });
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
-    );
-  }
-
-
-  const member =
-    await prisma.iddirMember.findUnique({
-
-      where: {
-        id: value.id,
-      },
-
-      include: {
-
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phoneNumber: true,
-            role: true,
-            condoId: true,
-            condoCode: true,
-            block: true,
-            roomNo: true,
-            profilePhoto: true,
-            isInIddir: true,
-          },
-        },
-
-        iddir: {
-          select: {
-            id: true,
-            name: true,
-            condoId: true,
-            status: true,
-            contributionAmount: true,
-            startedDate: true,
-            noMembers: true,
-          },
-        },
-      },
+// Get Iddir member by ID
+export const getIddirMemberByIdService =
+  async (
+    memberId,
+    condoId = null,
+    requester
+  ) => {
+    const {
+      error,
+      value,
+    } = iddirMemberIdValidation.validate({
+      id: memberId,
     });
 
+    if (error) {
+      throw new AppError(
+        error.details[0].message,
+        400
+      );
+    }
 
-  if (!member) {
-    throw new AppError(
-      "Iddir member not found",
-      404
-    );
-  }
+    checkAdminRole(requester);
 
+    if (condoId) {
+      await validateCondoExists(condoId);
 
-  /*
-   * Condo admin access
-   */
+      validateCondoAccess(
+        requester,
+        condoId
+      );
+    }
 
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== member.iddir.condoId
-  ) {
-    throw new AppError(
-      "You are not authorized to view this member",
-      403
-    );
-  }
+    const member =
+      await prisma.iddirMember.findFirst({
+        where: {
+          id: value.id,
+          iddir: {
+            deletedAt: null,
+            ...(condoId
+              ? {
+                  condoId:
+                    String(condoId),
+                }
+              : {}),
+            ...(requester.role ===
+            "condo_admin"
+              ? {
+                  condoId:
+                    String(
+                      requester.condoId
+                    ),
+                }
+              : {}),
+          },
+        },
+        select: memberSelect,
+      });
 
+    if (!member) {
+      throw new AppError(
+        "Iddir member not found",
+        404
+      );
+    }
 
-  return member;
-};
-
-export const updateIddirMemberService = async (
-  memberId,
-  payload,
-  requester
-) => {
-
-  /*
-   * Validate body
-   */
-
-  const {
-    error,
-    value,
-  } = updateIddirMemberValidation.validate(
-    payload
-  );
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
-    );
-  }
-
-
-  /*
-   * Authorization
-   */
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "You are not authorized to update Iddir members",
-      403
-    );
-  }
-
-
-  /*
-   * Find member
-   */
-
-  const member =
-    await prisma.iddirMember.findUnique({
-
-      where: {
-        id: memberId,
-      },
-
-      include: {
-        iddir: true,
-        user: true,
-      },
-    });
-
-
-  if (!member) {
-    throw new AppError(
-      "Iddir member not found",
-      404
-    );
-  }
-
-
-  /*
-   * Condo admin access
-   */
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== member.iddir.condoId
-  ) {
-    throw new AppError(
-      "You can only update members from your own condominium",
-      403
-    );
-  }
-
-
-  /*
-   * Nothing to do
-   */
-
-  if (member.status === value.status) {
     return member;
-  }
+  };
 
+// Update Iddir member
+export const updateIddirMemberService =
+  async (
+    memberId,
+    condoId,
+    payload,
+    requester
+  ) => {
+    const {
+      error,
+      value,
+    } = updateIddirMemberValidation.validate(
+      payload
+    );
 
-  /*
-   * Active → inactive/suspended
-   */
+    if (error) {
+      throw new AppError(
+        error.details[0].message,
+        400
+      );
+    }
 
-  if (
-    member.status === "active" &&
-    (
-      value.status === "inactive" ||
-      value.status === "suspended"
-    )
-  ) {
+    checkAdminRole(requester);
 
-    const updatedMember =
-      await prisma.$transaction(
+    if (condoId) {
+      await validateCondoExists(condoId);
+
+      validateCondoAccess(
+        requester,
+        condoId
+      );
+    }
+
+    const member =
+      await prisma.iddirMember.findFirst({
+        where: {
+          id: memberId,
+          iddir: {
+            deletedAt: null,
+            ...(condoId
+              ? {
+                  condoId:
+                    String(condoId),
+                }
+              : {}),
+            ...(requester.role ===
+            "condo_admin"
+              ? {
+                  condoId:
+                    String(
+                      requester.condoId
+                    ),
+                }
+              : {}),
+          },
+        },
+        include: {
+          iddir: true,
+          user: true,
+        },
+      });
+
+    if (!member) {
+      throw new AppError(
+        "Iddir member not found",
+        404
+      );
+    }
+
+    if (
+      member.status === value.status
+    ) {
+      return prisma.iddirMember.findUnique({
+        where: {
+          id: memberId,
+        },
+        select: memberSelect,
+      });
+    }
+
+    // Active to inactive or suspended
+    if (
+      member.status === "active" &&
+      (
+        value.status === "inactive" ||
+        value.status === "suspended"
+      )
+    ) {
+      return prisma.$transaction(
         async (tx) => {
-
           const updated =
             await tx.iddirMember.update({
-
               where: {
                 id: memberId,
               },
-
               data: {
                 status: value.status,
                 leftAt: new Date(),
               },
-
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                    email: true,
-                    phoneNumber: true,
-                    role: true,
-                    condoId: true,
-                    block: true,
-                    roomNo: true,
-                    isInIddir: true,
-                  },
-                },
-
-                iddir: {
-                  select: {
-                    id: true,
-                    name: true,
-                    status: true,
-                    noMembers: true,
-                  },
-                },
-              },
+              select: memberSelect,
             });
-
-
-          /*
-           * Check whether user has another
-           * active Iddir membership.
-           */
 
           const anotherActive =
             await tx.iddirMember.findFirst({
-
               where: {
                 userId: member.userId,
-
                 status: "active",
-
                 id: {
                   not: memberId,
                 },
               },
             });
 
-
           await tx.user.update({
-
             where: {
               id: member.userId,
             },
-
             data: {
-              isInIddir: Boolean(anotherActive),
+              isInIddir:
+                Boolean(anotherActive),
             },
           });
 
-
-          /*
-           * Decrease member count
-           */
-
           await tx.iddir.update({
-
             where: {
               id: member.iddirId,
             },
-
             data: {
               noMembers: {
                 decrement: 1,
@@ -760,117 +873,76 @@ export const updateIddirMemberService = async (
             },
           });
 
-
           return updated;
         }
       );
-
-
-    return updatedMember;
-  }
-
-
-  /*
-   * Inactive/suspended → active
-   */
-
-  if (
-    (
-      member.status === "inactive" ||
-      member.status === "suspended"
-    ) &&
-    value.status === "active"
-  ) {
-
-    /*
-     * Check another active Iddir
-     */
-
-    const anotherActive =
-      await prisma.iddirMember.findFirst({
-
-        where: {
-          userId: member.userId,
-
-          status: "active",
-
-          id: {
-            not: memberId,
-          },
-        },
-      });
-
-
-    if (anotherActive) {
-      throw new AppError(
-        "User is already an active member of another Iddir",
-        409
-      );
     }
 
+    // Inactive or suspended to active
+    if (
+      (
+        member.status === "inactive" ||
+        member.status === "suspended"
+      ) &&
+      value.status === "active"
+    ) {
+      const anotherActive =
+        await prisma.iddirMember.findFirst({
+          where: {
+            userId: member.userId,
+            status: "active",
+            id: {
+              not: memberId,
+            },
+          },
+        });
 
-    const updatedMember =
-      await prisma.$transaction(
+      if (anotherActive) {
+        throw new AppError(
+          "User is already an active member of another Iddir",
+          409
+        );
+      }
+
+      if (
+        member.iddir.status !== "active"
+      ) {
+        throw new AppError(
+          "Cannot activate a member in an inactive Iddir",
+          400
+        );
+      }
+
+      return prisma.$transaction(
         async (tx) => {
-
           const updated =
             await tx.iddirMember.update({
-
               where: {
                 id: memberId,
               },
-
               data: {
                 status: "active",
+                joinedAt:
+                  member.joinedAt ||
+                  new Date(),
                 leftAt: null,
               },
-
-              include: {
-
-                user: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                    email: true,
-                    phoneNumber: true,
-                    role: true,
-                    condoId: true,
-                    block: true,
-                    roomNo: true,
-                    isInIddir: true,
-                  },
-                },
-
-                iddir: {
-                  select: {
-                    id: true,
-                    name: true,
-                    status: true,
-                    noMembers: true,
-                  },
-                },
-              },
+              select: memberSelect,
             });
 
-
           await tx.user.update({
-
             where: {
               id: member.userId,
             },
-
             data: {
               isInIddir: true,
             },
           });
 
-
           await tx.iddir.update({
-
             where: {
               id: member.iddirId,
             },
-
             data: {
               noMembers: {
                 increment: 1,
@@ -878,191 +950,117 @@ export const updateIddirMemberService = async (
             },
           });
 
-
           return updated;
         }
       );
+    }
 
-
-    return updatedMember;
-  }
-
-
-  throw new AppError(
-    "Invalid member status transition",
-    400
-  );
-};
-
-export const removeIddirMemberService = async (
-  memberId,
-  requester
-) => {
-
-  /*
-   * Authorization
-   */
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
     throw new AppError(
-      "You are not authorized to remove Iddir members",
-      403
-    );
-  }
-
-
-  /*
-   * Find member
-   */
-
-  const member =
-    await prisma.iddirMember.findUnique({
-
-      where: {
-        id: memberId,
-      },
-
-      include: {
-        iddir: true,
-        user: true,
-      },
-    });
-
-
-  if (!member) {
-    throw new AppError(
-      "Iddir member not found",
-      404
-    );
-  }
-
-
-  /*
-   * Condo admin access
-   */
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== member.iddir.condoId
-  ) {
-    throw new AppError(
-      "You can only remove members from your own condominium",
-      403
-    );
-  }
-
-
-  /*
-   * Already inactive
-   */
-
-  if (member.status !== "active") {
-    throw new AppError(
-      "This user is not an active member of the Iddir",
+      "Invalid member status transition",
       400
     );
-  }
+  };
 
+// Remove Iddir member
+export const removeIddirMemberService =
+  async (
+    memberId,
+    condoId,
+    requester
+  ) => {
+    checkAdminRole(requester);
 
-  /*
-   * Don't allow removal if member
-   * has unpaid/financial obligations.
-   *
-   * For now we don't automatically block it.
-   * You can add that business rule later.
-   */
+    if (condoId) {
+      await validateCondoExists(condoId);
 
-  const result =
-    await prisma.$transaction(
+      validateCondoAccess(
+        requester,
+        condoId
+      );
+    }
+
+    const member =
+      await prisma.iddirMember.findFirst({
+        where: {
+          id: memberId,
+          iddir: {
+            deletedAt: null,
+            ...(condoId
+              ? {
+                  condoId:
+                    String(condoId),
+                }
+              : {}),
+            ...(requester.role ===
+            "condo_admin"
+              ? {
+                  condoId:
+                    String(
+                      requester.condoId
+                    ),
+                }
+              : {}),
+          },
+        },
+        include: {
+          iddir: true,
+          user: true,
+        },
+      });
+
+    if (!member) {
+      throw new AppError(
+        "Iddir member not found",
+        404
+      );
+    }
+
+    if (member.status !== "active") {
+      throw new AppError(
+        "This user is not an active member of the Iddir",
+        400
+      );
+    }
+
+    return prisma.$transaction(
       async (tx) => {
-
-        /*
-         * Mark member inactive
-         */
-
-        const updatedMember =
+        const updated =
           await tx.iddirMember.update({
-
             where: {
               id: memberId,
             },
-
             data: {
               status: "inactive",
               leftAt: new Date(),
             },
-
-            include: {
-
-              user: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                  phoneNumber: true,
-                },
-              },
-
-              iddir: {
-                select: {
-                  id: true,
-                  name: true,
-                  noMembers: true,
-                },
-              },
-            },
+            select: memberSelect,
           });
-
-
-        /*
-         * Check if user belongs to another
-         * active Iddir.
-         */
 
         const anotherActive =
           await tx.iddirMember.findFirst({
-
             where: {
               userId: member.userId,
-
               status: "active",
-
               id: {
                 not: memberId,
               },
             },
           });
 
-
-        /*
-         * Update user's global flag
-         */
-
         await tx.user.update({
-
           where: {
             id: member.userId,
           },
-
           data: {
-            isInIddir: Boolean(anotherActive),
+            isInIddir:
+              Boolean(anotherActive),
           },
         });
 
-
-        /*
-         * Decrease Iddir member count
-         */
-
         await tx.iddir.update({
-
           where: {
             id: member.iddirId,
           },
-
           data: {
             noMembers: {
               decrement: 1,
@@ -1070,11 +1068,7 @@ export const removeIddirMemberService = async (
           },
         });
 
-
-        return updatedMember;
+        return updated;
       }
     );
-
-
-  return result;
-};
+  };
