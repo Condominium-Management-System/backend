@@ -2,6 +2,9 @@ import express from "express";
 
 import {
   createBlock,
+  searchBlocks,
+  getPublicBlocksByCondo,
+  getPublicBlockById,
   getAllBlocks,
   getBlockById,
   getBlockStatistics,
@@ -9,43 +12,64 @@ import {
   deleteBlock
 } from "../controllers/block.controller.js";
 
-import { authenticate} from "../middleware/auth.middleware.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
 import { Roles } from "../config/roles.config.js";
+
 const router = express.Router();
 
 
-// GET ALL
+// PUBLIC SEARCH
 
 router.get(
-  "/",
+  "/search",
+  searchBlocks
+);
+
+
+// ADMIN GET ALL BLOCKS INSIDE CONDO
+
+router.get(
+  "/:condoId/blocks/admin",
   authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
   getAllBlocks
 );
 
 
-// GET STATISTICS
+// ADMIN GET ONE BLOCK INSIDE CONDO
 
 router.get(
-  "/:id/statistics",
+  "/:condoId/blocks/:blockId/admin",
   authenticate,
-  getBlockStatistics
-);
-
-
-// GET ONE
-
-router.get(
-  "/:id",
-  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
   getBlockById
 );
 
 
-// CREATE
+// ADMIN BLOCK STATISTICS
+
+router.get(
+  "/:condoId/blocks/:blockId/statistics",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  getBlockStatistics
+);
+
+
+// CREATE BLOCK
 
 router.post(
-  "/",
+  "/:condoId/blocks",
   authenticate,
   authorizeRoles(
     Roles.SUPER_ADMIN,
@@ -55,10 +79,10 @@ router.post(
 );
 
 
-// UPDATE
+// UPDATE BLOCK
 
 router.patch(
-  "/:id",
+  "/:condoId/blocks/:blockId",
   authenticate,
   authorizeRoles(
     Roles.SUPER_ADMIN,
@@ -68,10 +92,10 @@ router.patch(
 );
 
 
-// DELETE
+// DELETE BLOCK
 
 router.delete(
-  "/:id",
+  "/:condoId/blocks/:blockId",
   authenticate,
   authorizeRoles(
     Roles.SUPER_ADMIN,
@@ -79,5 +103,22 @@ router.delete(
   ),
   deleteBlock
 );
+
+
+// PUBLIC BLOCK LIST
+
+router.get(
+  "/:condoId/blocks",
+  getPublicBlocksByCondo
+);
+
+
+// PUBLIC SINGLE BLOCK
+
+router.get(
+  "/:condoId/blocks/:blockId",
+  getPublicBlockById
+);
+
 
 export default router;
