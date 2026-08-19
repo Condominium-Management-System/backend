@@ -4,20 +4,106 @@ import AppError from "../errorhandler/AppError.js";
 import {
   createEqubValidation,
   updateEqubValidation,
-  addEqubMemberValidation,
-  updateEqubMemberValidation,
+  searchEqubValidation,
 } from "../inputValidation/equb.validation.js";
+
+
+// HELPERS
+
+const isSuperAdmin = (user) =>
+  user?.role === "super_admin";
+
+const isCondoAdmin = (user) =>
+  user?.role === "condo_admin";
+
+
+// Check that the requested condo exists
+
+const getCondo = async (condoId) => {
+
+  const condo =
+    await prisma.condo.findFirst({
+
+      where: {
+        id: String(condoId),
+        deletedAt: null,
+      },
+
+      select: {
+        id: true,
+        condoCode: true,
+        condoName: true,
+        activeStatus: true,
+      },
+
+    });
+
+
+  if (!condo) {
+    throw new AppError(
+      "Condominium not found",
+      404
+    );
+  }
+
+
+  return condo;
+};
+
+
+// Check condo access
+
+const checkCondoAccess = (
+  requester,
+  condoId
+) => {
+
+  // Super admin can access everything
+
+  if (isSuperAdmin(requester)) {
+    return true;
+  }
+
+
+  // Condo admin can only access own condo
+
+  if (isCondoAdmin(requester)) {
+
+    if (
+      !requester.condoId ||
+      requester.condoId !== String(condoId)
+    ) {
+      throw new AppError(
+        "You can only manage Equbs in your own condominium",
+        403
+      );
+    }
+
+    return true;
+  }
+
+
+  throw new AppError(
+    "You do not have permission to manage Equbs",
+    403
+  );
+};
 
 
 // CREATE EQUb
 
 export const createEqubService = async (
+  condoId,
   requester,
   payload
 ) => {
 
   const { error, value } =
-    createEqubValidation.validate(payload);
+    createEqubValidation.validate({
+      ...payload,
+      condoId,
+    });
+
 
   if (error) {
     throw new AppError(
@@ -26,60 +112,17 @@ export const createEqubService = async (
     );
   }
 
-  const {
-    condoId,
-    name,
-    contributionAmount,
-    startDate,
-    dueDate,
-  } = value;
+
+  // Only admins can create
+
+  checkCondoAccess(
+    requester,
+    condoId
+  );
 
 
-  // ----------------------------------------------------
-  // CHECK REQUESTER
-  // ----------------------------------------------------
-
-  const admin = await prisma.user.findUnique({
-    where: {
-      id: String(requester.id),
-    },
-  });
-
-  if (!admin) {
-    throw new AppError(
-      "User not found",
-      404
-    );
-  }
-
-
-  if (
-    admin.role !== "super_admin" &&
-    admin.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "Only administrators can create an Equb",
-      403
-    );
-  }
-
-
-  // ----------------------------------------------------
-  // CHECK CONDO
-  // ----------------------------------------------------
-
-  const condo = await prisma.condo.findUnique({
-    where: {
-      id: condoId,
-    },
-  });
-
-  if (!condo) {
-    throw new AppError(
-      "Condominium not found",
-      404
-    );
-  }
+  const condo =
+    await getCondo(condoId);
 
 
   if (!condo.activeStatus) {
@@ -90,27 +133,12 @@ export const createEqubService = async (
   }
 
 
-  // ----------------------------------------------------
-  // CONDO ADMIN ACCESS
-  // ----------------------------------------------------
+  const start =
+    new Date(value.startDate);
 
-  if (
-    admin.role === "condo_admin" &&
-    admin.condoId !== condo.id
-  ) {
-    throw new AppError(
-      "You cannot manage Equbs in another condominium",
-      403
-    );
-  }
+  const due =
+    new Date(value.dueDate);
 
-
-  // ----------------------------------------------------
-  // DATE VALIDATION
-  // ----------------------------------------------------
-
-  const start = new Date(startDate);
-  const due = new Date(dueDate);
 
   if (due <= start) {
     throw new AppError(
@@ -120,32 +148,31 @@ export const createEqubService = async (
   }
 
 
-  // ----------------------------------------------------
-  // CREATE
-  // ----------------------------------------------------
+  return prisma.equb.create({
 
-  const equb = await prisma.equb.create({
     data: {
+
       condoId: condo.id,
 
-      createdById: admin.id,
+      createdById: requester.id,
 
-      name: name.trim(),
+      name: value.name.trim(),
 
-      noMembers: 0,
-
-      members: [],
-
-      status: "pending",
+      contributionAmount:
+        value.contributionAmount,
 
       startDate: start,
 
       dueDate: due,
 
-      contributionAmount,
+      noMembers: 0,
+
+      status: "pending",
+
     },
 
     include: {
+
       condo: {
         select: {
           id: true,
@@ -162,33 +189,272 @@ export const createEqubService = async (
           role: true,
         },
       },
+
     },
+
   });
 
-
-  return equb;
 };
 
 
-// GET ALL EQUBS
+// GET ALL EQUbs
+
 
 export const getAllEqubsService = async (
+  condoId,
+  requester,
+  filters = {}
+) => {
+
+  
+  // SUPER ADMIN
+  
+
+  if (isSuperAdmin(requester)) {
+
+    const where = {
+      deletedAt: null,
+    };
+
+    // Optional condo filter for super admin
+    if (condoId) {
+      await getCondo(condoId);
+
+      where.condoId = String(condoId);
+    }
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.name) {
+      where.name = {
+        contains: filters.name.trim(),
+        mode: "insensitive",
+      };
+    }
+
+    return prisma.equb.findMany({
+
+      where,
+
+      include: {
+
+        condo: {
+          select: {
+            id: true,
+            condoCode: true,
+            condoName: true,
+          },
+        },
+
+        createdBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+          },
+        },
+
+      },
+
+      orderBy: {
+        createdAt: "desc",
+      },
+
+    });
+  }
+
+
+   
+  // CONDO ADMIN
+  
+
+  if (isCondoAdmin(requester)) {
+
+    if (!condoId) {
+      throw new AppError(
+        "Condo ID is required",
+        400
+      );
+    }
+
+    // This guarantees condo admin can only access
+    // their own condominium
+    checkCondoAccess(
+      requester,
+      condoId
+    );
+
+    const where = {
+
+      condoId: String(condoId),
+
+      deletedAt: null,
+
+    };
+
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+
+    if (filters.name) {
+      where.name = {
+        contains: filters.name.trim(),
+        mode: "insensitive",
+      };
+    }
+
+
+    return prisma.equb.findMany({
+
+      where,
+
+      include: {
+
+        condo: {
+          select: {
+            id: true,
+            condoCode: true,
+            condoName: true,
+          },
+        },
+
+        createdBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+          },
+        },
+
+      },
+
+      orderBy: {
+        createdAt: "desc",
+      },
+
+    });
+  }
+
+
+  throw new AppError(
+    "You do not have permission to access Equbs",
+    403
+  );
+};
+
+
+// SEARCH EQUbs
+
+
+export const searchEqubsService = async (
+  condoId,
+  search,
   requester
 ) => {
+  const { error, value } =
+    searchEqubValidation.validate({ search });
+
+  if (error) {
+    throw new AppError(
+      error.details[0].message,
+      400
+    );
+  }
+
+  const keyword = value.search.trim();
 
   const where = {
     deletedAt: null,
   };
 
+  if (requester.role === "condo_admin") {
+    if (!requester.condoId) {
+      throw new AppError(
+        "Condo admin is not assigned to a condominium",
+        403
+      );
+    }
 
-  // Condo admin only sees own condo
+    if (
+      condoId &&
+      String(condoId) !== String(requester.condoId)
+    ) {
+      throw new AppError(
+        "You can only search Equbs in your own condominium",
+        403
+      );
+    }
 
-  if (
-    requester.role === "condo_admin"
-  ) {
-    where.condoId = requester.condoId;
+    where.condoId = String(requester.condoId);
   }
 
+  if (requester.role === "super_admin" && condoId) {
+    where.condoId = String(condoId);
+  }
+
+  where.OR = [
+    {
+      name: {
+        contains: keyword,
+        mode: "insensitive",
+      },
+    },
+    {
+      condo: {
+        condoCode: {
+          contains: keyword,
+          mode: "insensitive",
+        },
+      },
+    },
+    {
+      condo: {
+        condoName: {
+          contains: keyword,
+          mode: "insensitive",
+        },
+      },
+    },
+    {
+      createdBy: {
+        fullName: {
+          contains: keyword,
+          mode: "insensitive",
+        },
+      },
+    },
+    {
+      createdBy: {
+        email: {
+          contains: keyword,
+          mode: "insensitive",
+        },
+      },
+    },
+  ];
+
+  const validStatuses = [
+    "pending",
+    "active",
+    "completed",
+    "cancelled",
+  ];
+
+  if (
+    validStatuses.includes(
+      keyword.toLowerCase()
+    )
+  ) {
+    where.OR.push({
+      status: keyword.toLowerCase(),
+    });
+  }
 
   return prisma.equb.findMany({
     where,
@@ -210,38 +476,6 @@ export const getAllEqubsService = async (
           role: true,
         },
       },
-
-      members: {
-        where: {
-          status: "active",
-        },
-
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              fan: true,
-            },
-          },
-        },
-      },
-
-      winners: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              fan: true,
-            },
-          },
-        },
-      },
     },
 
     orderBy: {
@@ -251,20 +485,197 @@ export const getAllEqubsService = async (
 };
 
 
-// GET EQUB BY ID
+// GET EQUb BY ID
 
 export const getEqubByIdService = async (
-  requester,
-  equbId
+  condoId,
+  equbId,
+  requester
 ) => {
 
-  const equb = await prisma.equb.findFirst({
-    where: {
+
+  // SUPER ADMIN
+
+
+  if (isSuperAdmin(requester)) {
+
+    const where = {
+
       id: String(equbId),
+
       deletedAt: null,
+
+    };
+
+
+    // Optional condo restriction
+    if (condoId) {
+
+      await getCondo(condoId);
+
+      where.condoId =
+        String(condoId);
+
+    }
+
+
+    const equb =
+      await prisma.equb.findFirst({
+
+        where,
+
+        include: {
+
+          condo: {
+            select: {
+              id: true,
+              condoCode: true,
+              condoName: true,
+            },
+          },
+
+          createdBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+
+        },
+
+      });
+
+
+    if (!equb) {
+      throw new AppError(
+        "Equb not found",
+        404
+      );
+    }
+
+
+    return equb;
+  }
+
+
+  // 
+  // CONDO ADMIN
+  // 
+
+  if (isCondoAdmin(requester)) {
+
+    if (!condoId) {
+      throw new AppError(
+        "Condo ID is required",
+        400
+      );
+    }
+
+
+    checkCondoAccess(
+      requester,
+      condoId
+    );
+
+
+    const equb =
+      await prisma.equb.findFirst({
+
+        where: {
+
+          id: String(equbId),
+
+          condoId: String(condoId),
+
+          deletedAt: null,
+
+        },
+
+        include: {
+
+          condo: {
+            select: {
+              id: true,
+              condoCode: true,
+              condoName: true,
+            },
+          },
+
+          createdBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+
+        },
+
+      });
+
+
+    if (!equb) {
+      throw new AppError(
+        "Equb not found in this condominium",
+        404
+      );
+    }
+
+
+    return equb;
+  }
+
+
+  throw new AppError(
+    "You do not have permission to access this Equb",
+    403
+  );
+};
+
+
+// PUBLIC / USER EQUbs
+// LIMITED INFORMATION
+
+export const getPublicEqubsService = async (
+  condoId
+) => {
+
+  await getCondo(condoId);
+
+
+  return prisma.equb.findMany({
+
+    where: {
+
+      condoId: String(condoId),
+
+      deletedAt: null,
+
+      status: {
+        not: "cancelled",
+      },
+
     },
 
-    include: {
+    select: {
+
+      id: true,
+
+      name: true,
+
+      contributionAmount: true,
+
+      startDate: true,
+
+      dueDate: true,
+
+      status: true,
+
+      noMembers: true,
+
       condo: {
         select: {
           id: true,
@@ -273,100 +684,70 @@ export const getEqubByIdService = async (
         },
       },
 
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-
-      members: {
-        where: {
-          status: "active",
-        },
-
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              fan: true,
-              condoId: true,
-              condoCode: true,
-            },
-          },
-        },
-      },
-
-      winners: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              fan: true,
-            },
-          },
-        },
-      },
     },
+
+    orderBy: {
+      createdAt: "desc",
+    },
+
   });
 
-
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot access this Equb",
-      403
-    );
-  }
-
-
-  return equb;
 };
 
 
-// UPDATE EQUB
 
-export const updateEqubService = async (
-  requester,
-  equbId,
-  payload
+
+// PUBLIC GET ONE EQUb
+// LIMITED INFORMATION
+
+export const getPublicEqubByIdService = async (
+  condoId,
+  equbId
 ) => {
-
-  const { error, value } =
-    updateEqubValidation.validate(payload);
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
-    );
-  }
-
 
   const equb =
     await prisma.equb.findFirst({
+
       where: {
+
         id: String(equbId),
+
+        condoId: String(condoId),
+
         deletedAt: null,
+
+        status: {
+          not: "cancelled",
+        },
+
       },
+
+      select: {
+
+        id: true,
+
+        name: true,
+
+        contributionAmount: true,
+
+        startDate: true,
+
+        dueDate: true,
+
+        status: true,
+
+        noMembers: true,
+
+        condo: {
+          select: {
+            id: true,
+            condoCode: true,
+            condoName: true,
+          },
+        },
+
+      },
+
     });
 
 
@@ -378,17 +759,60 @@ export const updateEqubService = async (
   }
 
 
-  // ----------------------------------------------------
-  // ACCESS
-  // ----------------------------------------------------
+  return equb;
+};
 
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
+
+
+// UPDATE EQUb
+
+export const updateEqubService = async (
+  condoId,
+  equbId,
+  payload,
+  requester
+) => {
+
+  checkCondoAccess(
+    requester,
+    condoId
+  );
+
+
+  const { error, value } =
+    updateEqubValidation.validate(
+      payload
+    );
+
+
+  if (error) {
     throw new AppError(
-      "You cannot update this Equb",
-      403
+      error.details[0].message,
+      400
+    );
+  }
+
+
+  const equb =
+    await prisma.equb.findFirst({
+
+      where: {
+
+        id: String(equbId),
+
+        condoId: String(condoId),
+
+        deletedAt: null,
+
+      },
+
+    });
+
+
+  if (!equb) {
+    throw new AppError(
+      "Equb not found in this condominium",
+      404
     );
   }
 
@@ -397,15 +821,19 @@ export const updateEqubService = async (
 
 
   if (value.name !== undefined) {
-    data.name = value.name.trim();
+    data.name =
+      value.name.trim();
   }
 
 
   if (
-    value.contributionAmount !== undefined
+    value.contributionAmount !==
+    undefined
   ) {
+
     data.contributionAmount =
       value.contributionAmount;
+
   }
 
 
@@ -426,19 +854,23 @@ export const updateEqubService = async (
     data.dueDate &&
     data.dueDate <= data.startDate
   ) {
+
     throw new AppError(
       "Due date must be after start date",
       400
     );
+
   }
 
 
   if (value.status !== undefined) {
-    data.status = value.status;
+    data.status =
+      value.status;
   }
 
 
   return prisma.equb.update({
+
     where: {
       id: equb.id,
     },
@@ -446,6 +878,7 @@ export const updateEqubService = async (
     data,
 
     include: {
+
       condo: {
         select: {
           id: true,
@@ -453,24 +886,34 @@ export const updateEqubService = async (
           condoName: true,
         },
       },
+
     },
+
   });
+
 };
 
 
-// DELETE EQUB
-
+//delete Equb
 export const deleteEqubService = async (
-  requester,
-  equbId
+  condoId,
+  equbId,
+  requester
 ) => {
 
   const equb =
     await prisma.equb.findFirst({
+
       where: {
+
         id: String(equbId),
+
+        condoId: String(condoId),
+
         deletedAt: null,
+
       },
+
     });
 
 
@@ -481,6 +924,9 @@ export const deleteEqubService = async (
     );
   }
 
+
+  // Condo admin can delete
+  // only own condominium Equbs
 
   if (
     requester.role === "condo_admin" &&
@@ -493,646 +939,26 @@ export const deleteEqubService = async (
   }
 
 
-  return prisma.equb.update({
+  await prisma.equb.update({
+
     where: {
       id: equb.id,
     },
 
     data: {
-      deletedAt: new Date(),
-      status: "cancelled",
-    },
-  });
-};
 
+      deletedAt:
+        new Date(),
 
-// ADD USER TO EQUB
+      status:
+        "cancelled",
 
-export const addEqubMemberService = async (
-  requester,
-  equbId,
-  payload
-) => {
-
-  const { error, value } =
-    addEqubMemberValidation.validate(payload);
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
-    );
-  }
-
-
-  const equb =
-    await prisma.equb.findFirst({
-      where: {
-        id: String(equbId),
-        deletedAt: null,
-      },
-    });
-
-
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot manage this Equb",
-      403
-    );
-  }
-
-
-  // ----------------------------------------------------
-  // USER
-  // ----------------------------------------------------
-
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        id: value.userId,
-      },
-    });
-
-
-  if (!user) {
-    throw new AppError(
-      "User not found",
-      404
-    );
-  }
-
-
-  if (user.condoId !== equb.condoId) {
-    throw new AppError(
-      "User does not belong to this condominium",
-      403
-    );
-  }
-
-
-  // ----------------------------------------------------
-  // CHECK EXISTING MEMBERSHIP
-  // ----------------------------------------------------
-
-  const existing =
-    await prisma.equbMember.findUnique({
-      where: {
-        equbId_userId: {
-          equbId: equb.id,
-          userId: user.id,
-        },
-      },
-    });
-
-
-  if (existing) {
-
-    if (
-      existing.status === "active"
-    ) {
-      throw new AppError(
-        "User is already a member of this Equb",
-        409
-      );
-    }
-
-
-    const member =
-      await prisma.equbMember.update({
-        where: {
-          id: existing.id,
-        },
-
-        data: {
-          status: "active",
-          joinedAt: new Date(),
-          leftAt: null,
-        },
-      });
-
-
-    await updateEqubMemberCount(
-      equb.id
-    );
-
-    return member;
-  }
-
-
-  const member =
-    await prisma.equbMember.create({
-      data: {
-        equbId: equb.id,
-        userId: user.id,
-        status: "active",
-        joinedAt: new Date(),
-      },
-    });
-
-
-  await updateEqubMemberCount(
-    equb.id
-  );
-
-
-  return member;
-};
-
-
-// REMOVE USER FROM EQUB
-
-export const removeEqubMemberService = async (
-  requester,
-  equbId,
-  userId
-) => {
-
-  const equb =
-    await prisma.equb.findFirst({
-      where: {
-        id: String(equbId),
-        deletedAt: null,
-      },
-    });
-
-
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot manage this Equb",
-      403
-    );
-  }
-
-
-  const member =
-    await prisma.equbMember.findUnique({
-      where: {
-        equbId_userId: {
-          equbId: equb.id,
-          userId: String(userId),
-        },
-      },
-    });
-
-
-  if (!member) {
-    throw new AppError(
-      "User is not a member of this Equb",
-      404
-    );
-  }
-
-
-  const updated =
-    await prisma.equbMember.update({
-      where: {
-        id: member.id,
-      },
-
-      data: {
-        status: "removed",
-        leftAt: new Date(),
-      },
-    });
-
-
-  await updateEqubMemberCount(
-    equb.id
-  );
-
-
-  return updated;
-};
-
-
-// UPDATE MEMBER STATUS
-
-export const updateEqubMemberService = async (
-  requester,
-  equbId,
-  userId,
-  payload
-) => {
-
-  const { error, value } =
-    updateEqubMemberValidation.validate(
-      payload
-    );
-
-  if (error) {
-    throw new AppError(
-      error.details[0].message,
-      400
-    );
-  }
-
-
-  const equb =
-    await prisma.equb.findFirst({
-      where: {
-        id: String(equbId),
-        deletedAt: null,
-      },
-    });
-
-
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot manage this Equb",
-      403
-    );
-  }
-
-
-  const member =
-    await prisma.equbMember.findUnique({
-      where: {
-        equbId_userId: {
-          equbId: equb.id,
-          userId: String(userId),
-        },
-      },
-    });
-
-
-  if (!member) {
-    throw new AppError(
-      "Equb member not found",
-      404
-    );
-  }
-
-
-  const updated =
-    await prisma.equbMember.update({
-      where: {
-        id: member.id,
-      },
-
-      data: {
-        status: value.status,
-
-        leftAt:
-          value.status === "active"
-            ? null
-            : new Date(),
-      },
-    });
-
-
-  await updateEqubMemberCount(
-    equb.id
-  );
-
-
-  return updated;
-};
-
-
-// GET EQUB MEMBERS
-
-export const getEqubMembersService = async (
-  requester,
-  equbId
-) => {
-
-  const equb =
-    await prisma.equb.findFirst({
-      where: {
-        id: String(equbId),
-        deletedAt: null,
-      },
-    });
-
-
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot access this Equb",
-      403
-    );
-  }
-
-
-  return prisma.equbMember.findMany({
-    where: {
-      equbId: equb.id,
-      status: "active",
     },
 
-    include: {
-      user: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          phoneNumber: true,
-          fan: true,
-          condoId: true,
-          condoCode: true,
-        },
-      },
-    },
-
-    orderBy: {
-      joinedAt: "asc",
-    },
-  });
-};
-
-
-// RANDOM WINNER
-
-export const selectEqubWinnerService = async (
-  requester,
-  equbId
-) => {
-
-  // ----------------------------------------------------
-  // FIND EQUb
-  // ----------------------------------------------------
-
-  const equb = await prisma.equb.findFirst({
-    where: {
-      id: String(equbId),
-      deletedAt: null,
-    },
-
-    include: {
-      members: {
-        where: {
-          status: "active",
-          hasReceivedPayout: false,
-        },
-
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phoneNumber: true,
-              fan: true,
-            },
-          },
-        },
-      },
-    },
   });
 
-  if (!equb) {
-    throw new AppError(
-      "Equb not found",
-      404
-    );
-  }
-
-  // ----------------------------------------------------
-  // AUTHORIZATION
-  // ----------------------------------------------------
-
-  if (
-    requester.role === "condo_admin" &&
-    requester.condoId !== equb.condoId
-  ) {
-    throw new AppError(
-      "You cannot select a winner for this Equb",
-      403
-    );
-  }
-
-  if (
-    requester.role !== "super_admin" &&
-    requester.role !== "condo_admin"
-  ) {
-    throw new AppError(
-      "Only admin can select an Equb winner",
-      403
-    );
-  }
-
-  // ----------------------------------------------------
-  // CHECK EQUb STATUS
-  // ----------------------------------------------------
-
-  if (equb.status !== "active") {
-    throw new AppError(
-      "Only an active Equb can select a winner",
-      400
-    );
-  }
-
-  // ----------------------------------------------------
-  // CHECK MEMBERS
-  // ----------------------------------------------------
-
-  if (equb.members.length === 0) {
-    throw new AppError(
-      "Equb has no eligible members",
-      400
-    );
-  }
-
-  // ----------------------------------------------------
-  // CHECK WHETHER ALL MEMBERS HAVE PAID
-  // ----------------------------------------------------
-
-  const contributionAmount =
-    Number(equb.contributionAmount);
-
-  const membersCount =
-    equb.members.length;
-
-  const expectedTotal =
-    contributionAmount * membersCount;
-
-  // ----------------------------------------------------
-  // RANDOM WINNER
-  // ----------------------------------------------------
-
-  const randomIndex = Math.floor(
-    Math.random() * membersCount
-  );
-
-  const selectedMember =
-    equb.members[randomIndex];
-
-  // ----------------------------------------------------
-  // GENERATE ROUND NUMBER
-  // ----------------------------------------------------
-
-  const previousPayouts =
-    await prisma.equbPayout.count({
-      where: {
-        equbId: equb.id,
-      },
-    });
-
-  const roundNumber =
-    previousPayouts + 1;
-
-  // ----------------------------------------------------
-  // SELECTION REFERENCE
-  // ----------------------------------------------------
-
-  const selectionReference =
-    `EQB-${Date.now()}-${crypto
-      .randomBytes(4)
-      .toString("hex")
-      .toUpperCase()}`;
-
-  // ----------------------------------------------------
-  // CREATE PAYOUT
-  // ----------------------------------------------------
-
-  const payout =
-    await prisma.equbPayout.create({
-      data: {
-        equbId: equb.id,
-
-        winnerId:
-          selectedMember.userId,
-
-        createdById:
-          requester.id,
-
-        // TOTAL MONEY COLLECTED
-        amount:
-          expectedTotal,
-
-        roundNumber,
-
-        selectionReference,
-
-        status: "selected",
-
-        selectedAt:
-          new Date(),
-      },
-
-      include: {
-        winner: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phoneNumber: true,
-            fan: true,
-          },
-        },
-
-        equb: {
-          select: {
-            id: true,
-            name: true,
-            contributionAmount: true,
-          },
-        },
-      },
-    });
 
   return {
-    payoutId: payout.id,
-
-    selectionReference:
-      payout.selectionReference,
-
-    roundNumber:
-      payout.roundNumber,
-
-    equb: {
-      id: payout.equb.id,
-      name: payout.equb.name,
-    },
-
-    contributionPerMember:
-      contributionAmount,
-
-    totalMembers:
-      membersCount,
-
-    totalAmountCollected:
-      expectedTotal,
-
-    winner: payout.winner,
-
-    amountWinnerWillReceive:
-      expectedTotal,
-
-    status:
-      payout.status,
-
-    selectedAt:
-      payout.selectedAt,
+    deleted: true,
   };
-}
-
-
-// HELPER
-
-const updateEqubMemberCount = async (
-  equbId
-) => {
-
-  const count =
-    await prisma.equbMember.count({
-      where: {
-        equbId,
-        status: "active",
-      },
-    });
-
-
-  return prisma.equb.update({
-    where: {
-      id: equbId,
-    },
-
-    data: {
-      noMembers: count,
-    },
-  });
 };
