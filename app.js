@@ -103,6 +103,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/accounts", userAccountRoutes);
 app.use("/api/reciept", recieptRoutes);
+app.use("/api/announncement",announcementRoutes);
 app.use("/api/equb-members", equbMemberRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/reports", reportRoutes);
