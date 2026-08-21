@@ -34,7 +34,7 @@ router.get(
 
 // Get all users
 router.get(
-  "/",
+  "/:condoId",
   authorizeRoles(
     Roles.GUARD,
     Roles.CONDO_ADMIN,
@@ -55,10 +55,8 @@ router.get(
 
 // Search users
 router.get(
-  "/search",
+  "/search/",
   authorizeRoles(
-    Roles.GUARD,
-    Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
   searchUsers
@@ -78,8 +76,6 @@ router.get(
 router.get(
   "/user/:userId",
   authorizeRoles(
-    Roles.GUARD,
-    Roles.CONDO_ADMIN,
     Roles.SUPER_ADMIN
   ),
   getUserById
