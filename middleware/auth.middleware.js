@@ -49,6 +49,8 @@ export const authenticate = (req, res, next) => {
       email: payload.email,
 
       role: payload.role,
+
+      condoId: payload.condoId || null,
     };
 
 
