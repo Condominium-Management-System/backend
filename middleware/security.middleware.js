@@ -2,7 +2,7 @@ import rateLimit from "express-rate-limit";
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max:100000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
@@ -13,7 +13,7 @@ export const globalRateLimiter = rateLimit({
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max:100000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
@@ -25,7 +25,7 @@ export const authRateLimiter = rateLimit({
 
 export const sensitiveRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max:100000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
