@@ -1,4 +1,4 @@
-// validations/promotion.validation.js
+// inputValidation/promotion.validation.js
 import Joi from "joi";
 
 // Validation schema for creating a promotion (Admin only)
@@ -147,6 +147,7 @@ export const reviewPromotionValidation = Joi.object({
 });
 
 // Validation schema for query parameters (Public)
+// ✅ UPDATED: Added 'pending', 'approved', 'rejected', 'cancelled' and 'all' to allowed status values
 export const getPromotionsQueryValidation = Joi.object({
   type: Joi.string().trim().optional().valid('shop', 'technical', 'service', 'product', 'event', 'other').messages({
     'any.only': 'Invalid promotion type'
@@ -154,7 +155,16 @@ export const getPromotionsQueryValidation = Joi.object({
 
   category: Joi.string().trim().optional().max(50),
 
-  status: Joi.string().trim().optional().valid('active', 'expired', 'all').default('active'),
+  // ✅ UPDATED: Now accepts all status values including 'all'
+  status: Joi.string().trim().optional().valid(
+    'active',
+    'pending',
+    'approved',
+    'rejected',
+    'expired',
+    'cancelled',
+    'all'
+  ).default('active'),
 
   search: Joi.string().trim().optional().max(100).messages({
     'string.max': 'Search term cannot exceed 100 characters'
