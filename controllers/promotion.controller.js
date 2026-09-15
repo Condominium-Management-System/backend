@@ -3,13 +3,18 @@ import * as promotionService from "../services/promotion.service.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 // Get all promotions (Public)
+// ✅ UPDATED: Handle 'all' status properly
 export const getAllPromotions = asyncHandler(async (req, res) => {
   const { type, category, status, search, page, limit } = req.query;
+
+  // ✅ Convert 'all' to undefined so the service doesn't filter by status
+  // This allows admins to see all promotions (pending, approved, rejected, etc.)
+  const statusParam = (status === 'all' || !status) ? undefined : status;
 
   const result = await promotionService.getAllPromotionsService({
     type,
     category,
-    status: status || 'active',
+    status: statusParam,
     search,
     page,
     limit

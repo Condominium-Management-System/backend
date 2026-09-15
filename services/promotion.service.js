@@ -3,23 +3,32 @@ import { prisma } from "../config/prisma.config.js";
 import AppError from "../errorhandler/AppError.js";
 
 // Get all promotions (Public - anyone can view)
+// ✅ UPDATED: When no status is provided, show all promotions (for admin view)
 export const getAllPromotionsService = async (filters = {}) => {
   try {
-    const { type, category, status = 'active', search, page = 1, limit = 20 } = filters;
+    const { type, category, status, search, page = 1, limit = 20 } = filters;
     const skip = (page - 1) * limit;
 
+    // ✅ UPDATED: Base where clause - only exclude deleted items
     const where = {
-      deletedAt: null,
-      isActive: true
+      deletedAt: null
     };
 
-    if (status === 'active') {
-      where.status = 'active';
-      where.expiresAt = { gt: new Date() };
-    } else if (status === 'all') {
-      // Admin can see all
+    // ✅ UPDATED: Apply status filter only when status is provided
+    if (status) {
+      if (status === 'active') {
+        // Active = status is active AND not expired
+        where.status = 'active';
+        where.isActive = true;
+        where.expiresAt = { gt: new Date() };
+      } else {
+        // Any specific status - filter by it
+        where.status = status;
+      }
     } else {
-      where.status = status;
+      // No status filter → Admin view: show ALL promotions
+      // Don't filter by isActive or status
+      // This shows pending, approved, rejected, expired, cancelled, etc.
     }
 
     if (type) where.type = type;
@@ -91,7 +100,6 @@ export const getPromotionByIdService = async (promotionId) => {
       where: {
         id: promotionId,
         deletedAt: null,
-       
       },
       include: {
         postedBy: {
@@ -409,7 +417,7 @@ export const deletePromotionService = async (userId, userRole, promotionId) => {
       throw new AppError("Promotion not found", 404);
     }
 
-    const deletedPromotion = await prisma.promotion.update({
+    await prisma.promotion.update({
       where: { id: promotionId },
       data: {
         deletedAt: new Date(),
