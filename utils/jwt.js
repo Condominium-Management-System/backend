@@ -6,8 +6,8 @@ export const signAccessToken = (user) => {
     { 
       role: user.role, 
       email: user.email,
-      condoId: user.condoId,      // ✅ ADD THIS
-      fullName: user.fullName,     // ✅ ADD THIS
+      condoId: user.condoId,      
+      fullName: user.fullName,     
     },
     appConfig.accessTokenSecret,
     { subject: user.id, expiresIn: appConfig.accessTokenExpiresIn }
