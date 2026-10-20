@@ -3,7 +3,12 @@ import { appConfig } from "../config/app.config.js"
 
 export const signAccessToken = (user) => {
   return jwt.sign(
-    { role: user.role, email: user.email },
+    { 
+      role: user.role, 
+      email: user.email,
+      condoId: user.condoId,      // ✅ ADD THIS
+      fullName: user.fullName,     // ✅ ADD THIS
+    },
     appConfig.accessTokenSecret,
     { subject: user.id, expiresIn: appConfig.accessTokenExpiresIn }
   )
@@ -11,7 +16,12 @@ export const signAccessToken = (user) => {
 
 export const signRefreshToken = (user) => {
   return jwt.sign(
-    { role: user.role, email: user.email },
+    { 
+      role: user.role, 
+      email: user.email,
+      condoId: user.condoId,      
+      fullName: user.fullName,     
+    },
     appConfig.refreshTokenSecret,
     { subject: user.id, expiresIn: appConfig.refreshTokenExpiresIn }
   )
