@@ -19,8 +19,13 @@ import {
 // CREATE ROOM
 export const createRoom = asyncHandler(
   async (req, res) => {
+    const condoId =
+      req.params.condoId ||
+      req.body.condoId ||
+      req.user?.condoId;
+
     const room = await createRoomService(
-      req.params.condoId,
+      condoId,
       req.body,
       req.user
     );
@@ -82,7 +87,7 @@ export const getPublicRoomById =
     async (req, res) => {
       const room =
         await getPublicRoomByIdService(
-          req.params.roomId
+          req.params.roomId || req.params.id
         );
 
       res.status(200).json({
@@ -112,10 +117,14 @@ export const getPublicRoomStatistics =
 export const getAllRooms =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        req.query.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
       const rooms =
         await getAllRoomsService({
-          condoId:
-            req.params.condoId || null,
+          condoId,
 
           blockId:
             req.query.blockId,
@@ -139,10 +148,14 @@ export const getAllRooms =
 export const searchRooms =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        req.query.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
       const rooms =
         await getAllRoomsServiceBySearch({
-          condoId:
-            req.params.condoId || null,
+          condoId,
 
           blockId:
             req.query.blockId,
@@ -169,13 +182,18 @@ export const searchRooms =
 export const getRoomById =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
+      const roomId =
+        req.params.roomId ||
+        req.params.id;
+
       const room =
         await getRoomByIdService(
-          req.params.condoId || null,
-
-          req.params.roomId ||
-            req.params.id,
-
+          condoId,
+          roomId,
           req.user
         );
 
@@ -190,10 +208,18 @@ export const getRoomById =
 export const updateRoom =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
+      const roomId =
+        req.params.roomId ||
+        req.params.id;
+
       const room =
         await updateRoomService(
-          req.params.condoId,
-          req.params.roomId,
+          condoId,
+          roomId,
           req.body,
           req.user
         );
@@ -211,10 +237,18 @@ export const updateRoom =
 export const updateRoomStatus =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
+      const roomId =
+        req.params.roomId ||
+        req.params.id;
+
       const room =
         await updateRoomStatusService(
-          req.params.condoId,
-          req.params.roomId,
+          condoId,
+          roomId,
           req.body,
           req.user
         );
@@ -232,9 +266,14 @@ export const updateRoomStatus =
 export const getAvailableRooms =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        req.query.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
       const rooms =
         await getAvailableRoomsService(
-          req.params.condoId || null,
+          condoId,
           req.user,
           req.query.blockId
         );
@@ -251,9 +290,14 @@ export const getAvailableRooms =
 export const getOccupiedRooms =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        req.query.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
       const rooms =
         await getOccupiedRoomsService(
-          req.params.condoId || null,
+          condoId,
           req.user,
           req.query.blockId
         );
@@ -270,9 +314,14 @@ export const getOccupiedRooms =
 export const getReservedRooms =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        req.query.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
       const rooms =
         await getReservedRoomsService(
-          req.params.condoId || null,
+          condoId,
           req.user,
           req.query.blockId
         );
@@ -289,10 +338,18 @@ export const getReservedRooms =
 export const deleteRoom =
   asyncHandler(
     async (req, res) => {
+      const condoId =
+        req.params.condoId ||
+        (req.user.role === 'condo_admin' ? req.user.condoId : null);
+
+      const roomId =
+        req.params.roomId ||
+        req.params.id;
+
       const result =
         await deleteRoomService(
-          req.params.condoId,
-          req.params.roomId,
+          condoId,
+          roomId,
           req.user
         );
 
