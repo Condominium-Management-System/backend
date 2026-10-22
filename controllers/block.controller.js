@@ -121,16 +121,20 @@ export const getPublicBlockById =
 
 // ADMIN GET ALL
 //
-// GET /api/blocks
+// GET /api/blocks/:condoId/blocks/admin
 
 export const getAllBlocks =
   asyncHandler(async (req, res) => {
 
+    const condoId =
+      req.params.condoId ||
+      req.query.condoId ||
+      req.user?.condoId;
+
     const blocks =
       await getAllBlocksService({
 
-        condoId:
-          req.query.condoId,
+        condoId,
 
         requester:
           req.user
@@ -155,10 +159,11 @@ export const getAllBlocks =
 
 // ADMIN GET ONE
 //
-// GET /api/blocks/:id
+// GET /api/blocks/:condoId/blocks/:blockId/admin
 
 export const getBlockById = asyncHandler(async (req, res) => {
-  const { condoId, blockId } = req.params;
+  const condoId = req.params.condoId || req.user?.condoId;
+  const blockId = req.params.blockId || req.params.id;
 
   const block = await getBlockByIdService(
     condoId,
@@ -175,14 +180,12 @@ export const getBlockById = asyncHandler(async (req, res) => {
 
 // ADMIN STATISTICS
 //
-// GET /api/blocks/:id/statistics
+// GET /api/blocks/:condoId/blocks/:blockId/statistics
 
 export const getBlockStatistics = asyncHandler(
   async (req, res) => {
-    const {
-      condoId,
-      blockId
-    } = req.params;
+    const condoId = req.params.condoId || req.user?.condoId;
+    const blockId = req.params.blockId || req.params.id;
 
     const statistics =
       await getBlockStatisticsService(
@@ -201,15 +204,20 @@ export const getBlockStatistics = asyncHandler(
 
 // CREATE
 //
-// POST /api/blocks
+// POST /api/blocks/:condoId/blocks
 
 export const createBlock =
   asyncHandler(async (req, res) => {
 
+    const payload = {
+      ...req.body,
+      condoId: req.body.condoId || req.params.condoId || req.user?.condoId
+    };
+
     const block =
       await createBlockService(
 
-        req.body,
+        payload,
 
         req.user
 
@@ -233,15 +241,19 @@ export const createBlock =
 
 // UPDATE
 //
-// PATCH /api/blocks/:id
+// PATCH /api/blocks/:condoId/blocks/:blockId
 
 export const updateBlock =
   asyncHandler(async (req, res) => {
 
+    const blockId =
+      req.params.blockId ||
+      req.params.id;
+
     const block =
       await updateBlockService(
 
-        req.params.id,
+        blockId,
 
         req.body,
 
@@ -267,15 +279,19 @@ export const updateBlock =
 
 // DELETE
 //
-// DELETE /api/blocks/:id
+// DELETE /api/blocks/:condoId/blocks/:blockId
 
 export const deleteBlock =
   asyncHandler(async (req, res) => {
 
+    const blockId =
+      req.params.blockId ||
+      req.params.id;
+
     const result =
       await deleteBlockService(
 
-        req.params.id,
+        blockId,
 
         req.user
 
