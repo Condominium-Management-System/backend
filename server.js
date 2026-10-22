@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import http from "http";
 
 import app from "./app.js";
@@ -8,8 +8,6 @@ import {
   disconnectDB,
 } from "./config/db.config.js";
 import { initializeSocket } from "./socket/socket.setup.js";
-
-dotenv.config();
 
 const startServer = async () => {
   try {
@@ -21,9 +19,9 @@ const startServer = async () => {
 
     app.set("io", io);
 
-    server.listen(appConfig.port, () => {
+    server.listen(appConfig.port || 3000, () => {
       console.log(
-        `Server is running on port ${appConfig.port}`
+        `Server is running on port ${appConfig.port || 3000}`
       );
       console.log("Socket.IO initialized");
     });
