@@ -175,6 +175,46 @@ router.get(
   getRoomById
 );
 
+// ADMIN CREATE ROOM (DIRECT)
+router.post(
+  "/",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  createRoom
+);
+
+// ADMIN UPDATE ROOM STATUS (DIRECT)
+router.patch(
+  "/:roomId/status",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  updateRoomStatus
+);
+
+// ADMIN UPDATE ROOM (DIRECT)
+router.patch(
+  "/:roomId",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  updateRoom
+);
+
+// ADMIN DELETE ROOM (DIRECT)
+router.delete(
+  "/:roomId",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  deleteRoom
+);
+
 // ADMIN CREATE ROOM
 router.post(
   "/:condoId",
