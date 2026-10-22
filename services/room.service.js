@@ -213,7 +213,8 @@ export const createRoomService =
         floorNo: value.floorNo,
         price: value.price,
         model: value.model,
-        status: "free"
+        occupiedById: (value.status === "occupied" && value.occupiedById) ? String(value.occupiedById) : null,
+        status: value.status || "free"
       },
       select: adminRoomSelect
     });
@@ -437,7 +438,7 @@ export const getPublicRoomStatisticsService =
       prisma.room.count({
         where: {
           blockId: block.id,
-          status: "free",
+          status: value.status || "free",
           deletedAt: null
         }
       }),
@@ -1089,7 +1090,7 @@ export const getAvailableRoomsService =
         condoId,
         requester,
         blockId,
-        status: "free"
+        status: value.status || "free"
       });
     }
 
