@@ -149,13 +149,15 @@ export const registerService = async (payload) => {
 
       fan,
 
-      role: Roles.RESIDENT,
+      role: value.role || Roles.RESIDENT,
 
       condoId: condo.id,
       condoCode: condo.condoCode,
 
       // Admin must verify later
-      isVerified: false,
+      block: value.block || null,
+      roomNo: value.roomNo || null,
+      isVerified: value.isVerified !== undefined ? value.isVerified : true,
     },
   });
 
