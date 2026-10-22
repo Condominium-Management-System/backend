@@ -20,9 +20,14 @@ import {
 export const getAllUsers = asyncHandler(
   async (req, res) => {
 
+    const condoId =
+      req.params.condoId ||
+      req.query.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
+
     const users =
       await getUsersService(
-        req.params.condoId || null,
+        condoId,
         req.user,
         {
           role:
@@ -57,10 +62,15 @@ export const getAllUsers = asyncHandler(
 export const searchUsers = asyncHandler(
   async (req, res) => {
 
+    const condoId =
+      req.params.condoId ||
+      req.query.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
+
     const users =
       await searchUsersService(
         req.query.search,
-        req.params.condoId || null,
+        condoId,
         req.user
       );
 
@@ -80,10 +90,18 @@ export const searchUsers = asyncHandler(
 export const getUserById = asyncHandler(
   async (req, res) => {
 
+    const userId =
+      req.params.userId ||
+      req.params.id;
+
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
+
     const user =
       await getUserByIdService(
-        req.params.condoId || null,
-        req.params.userId,
+        condoId,
+        userId,
         req.user
       );
 
@@ -123,17 +141,19 @@ export const getUserProfile = asyncHandler(
 
 
 
-// vERIFY USER
+// VERIFY USER
 
 
 export const verifyUser = asyncHandler(
   async (req, res) => {
 
-    const {
-      condoId,
-      userId
-    } = req.params;
+    const userId =
+      req.params.userId ||
+      req.params.id;
 
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
 
     const user =
       await verifyUserService(
@@ -162,11 +182,13 @@ export const verifyUser = asyncHandler(
 export const updateUserRole = asyncHandler(
   async (req, res) => {
 
-    const {
-      condoId,
-      userId
-    } = req.params;
+    const userId =
+      req.params.userId ||
+      req.params.id;
 
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
 
     const user =
       await updateUserRoleService(
@@ -195,11 +217,13 @@ export const updateUserRole = asyncHandler(
 export const updateUserByAdmin = asyncHandler(
   async (req, res) => {
 
-    const {
-      condoId,
-      userId
-    } = req.params;
+    const userId =
+      req.params.userId ||
+      req.params.id;
 
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
 
     const user =
       await updateUserByAdminService(
@@ -228,11 +252,13 @@ export const updateUserByAdmin = asyncHandler(
 export const deleteUser = asyncHandler(
   async (req, res) => {
 
-    const {
-      condoId,
-      userId
-    } = req.params;
+    const userId =
+      req.params.userId ||
+      req.params.id;
 
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
 
     const result =
       await deleteUserService(
@@ -260,11 +286,13 @@ export const deleteUser = asyncHandler(
 export const restoreUser = asyncHandler(
   async (req, res) => {
 
-    const {
-      condoId,
-      userId
-    } = req.params;
+    const userId =
+      req.params.userId ||
+      req.params.id;
 
+    const condoId =
+      req.params.condoId ||
+      (req.user?.role === "condo_admin" ? req.user.condoId : null);
 
     const user =
       await restoreUserService(
