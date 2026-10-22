@@ -27,6 +27,60 @@ router.get(
 );
 
 
+// ADMIN GET ALL BLOCKS (DIRECT)
+router.get(
+  "/admin",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  getAllBlocks
+);
+
+router.get(
+  "/",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  getAllBlocks
+);
+
+// CREATE BLOCK (DIRECT)
+router.post(
+  "/",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  createBlock
+);
+
+// UPDATE BLOCK (DIRECT)
+router.patch(
+  "/:blockId",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  updateBlock
+);
+
+// DELETE BLOCK (DIRECT)
+router.delete(
+  "/:blockId",
+  authenticate,
+  authorizeRoles(
+    Roles.SUPER_ADMIN,
+    Roles.CONDO_ADMIN
+  ),
+  deleteBlock
+);
+
 // ADMIN GET ALL BLOCKS INSIDE CONDO
 
 router.get(
