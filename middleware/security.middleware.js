@@ -2,7 +2,7 @@ import rateLimit from "express-rate-limit";
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:100000,
+  max: 10000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
@@ -13,19 +13,18 @@ export const globalRateLimiter = rateLimit({
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:100000,
+  max: 10000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
     success: false,
-    message:
-      "Too many authentication attempts. Please try again later.",
+    message: "Too many authentication attempts. Please try again later.",
   },
 });
 
 export const sensitiveRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:100000,
+  max: 10000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {

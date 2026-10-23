@@ -41,11 +41,12 @@ export const updateUserByAdminValidation = Joi.object({
     "super_admin"
   ),
   dueDate: Joi.date().iso().optional(),
-  condoId: Joi.string(),
+  condoId: Joi.string().allow(null, "").optional(),
+  condoCode: Joi.string().allow(null, "").optional(),
 
   block: Joi.string().allow(null, ""),
 
   roomNo: Joi.string().allow(null, ""),
 
   isVerified: Joi.boolean()
-}).min(1);
+}).min(1).options({ stripUnknown: true });

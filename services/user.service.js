@@ -31,7 +31,7 @@ const checkCondoAccess = (
 
   if (
     !requester?.condoId ||
-    requester.condoId !== String(condoId)
+    (condoId && requester.condoId !== String(condoId))
   ) {
     throw new AppError(
       "You can only access users inside your condominium",
@@ -40,6 +40,21 @@ const checkCondoAccess = (
   }
 
   return true;
+};
+
+const buildUserWhere = (userId, condoId, requester) => {
+  const where = {
+    id: String(userId),
+    deletedAt: null
+  };
+
+  if (condoId) {
+    where.condoId = String(condoId);
+  } else if (!isSuperAdmin(requester) && requester?.condoId) {
+    where.condoId = requester.condoId;
+  }
+
+  return where;
 };
 
 
@@ -294,28 +309,7 @@ export const getUserByIdService = async (
   requester
 ) => {
 
-  const where = {
-    id: String(userId),
-    deletedAt: null
-  };
-
-  if (isSuperAdmin(requester)) {
-
-    if (condoId) {
-      where.condoId = String(condoId);
-    }
-
-  } else {
-
-    if (!requester?.condoId) {
-      throw new AppError(
-        "Condominium access is required",
-        403
-      );
-    }
-
-    where.condoId = requester.condoId;
-  }
+  const where = buildUserWhere(userId, condoId, requester);
 
   const user =
     await prisma.user.findFirst({
@@ -470,19 +464,13 @@ export const verifyUserService = async (
 
   const user =
     await prisma.user.findFirst({
-
-      where: {
-        id: String(userId),
-        condoId,
-        deletedAt: null
-      }
-
+      where: buildUserWhere(userId, condoId, requester)
     });
 
 
   if (!user) {
     throw new AppError(
-      "User not found in this condominium",
+      "User not found",
       404
     );
   }
@@ -543,19 +531,13 @@ export const updateUserRoleService = async (
 
   const user =
     await prisma.user.findFirst({
-
-      where: {
-        id: String(userId),
-        condoId,
-        deletedAt: null
-      }
-
+      where: buildUserWhere(userId, condoId, requester)
     });
 
 
   if (!user) {
     throw new AppError(
-      "User not found in this condominium",
+      "User not found",
       404
     );
   }
@@ -625,19 +607,13 @@ export const updateUserByAdminService = async (
 
   const user =
     await prisma.user.findFirst({
-
-      where: {
-        id: String(userId),
-        condoId,
-        deletedAt: null
-      }
-
+      where: buildUserWhere(userId, condoId, requester)
     });
 
 
   if (!user) {
     throw new AppError(
-      "User not found in this condominium",
+      "User not found",
       404
     );
   }
@@ -786,11 +762,9 @@ export const updateUserByAdminService = async (
   // CONDO
   // ====================================================
 
-  // Only super admin can move a user
-  // to another condominium.
-
   if (
-    value.condoId !== undefined
+    (value.condoId !== undefined && value.condoId) ||
+    (value.condoCode !== undefined && value.condoCode)
   ) {
 
     if (
@@ -807,8 +781,7 @@ export const updateUserByAdminService = async (
       await prisma.condo.findFirst({
 
         where: {
-          id:
-            value.condoId,
+          ...(value.condoId ? { id: value.condoId } : { condoCode: value.condoCode }),
 
           deletedAt:
             null
@@ -929,23 +902,13 @@ export const deleteUserService = async (
 
   const user =
     await prisma.user.findFirst({
-
-      where: {
-        id:
-          String(userId),
-
-        condoId,
-
-        deletedAt:
-          null
-      }
-
+      where: buildUserWhere(userId, condoId, requester)
     });
 
 
   if (!user) {
     throw new AppError(
-      "User not found in this condominium",
+      "User not found",
       404
     );
   }
@@ -994,22 +957,23 @@ export const restoreUserService = async (
   }
 
 
+  const where = {
+    id: String(userId)
+  };
+
+  if (condoId) {
+    where.condoId = String(condoId);
+  }
+
   const user =
     await prisma.user.findFirst({
-
-      where: {
-        id:
-          String(userId),
-
-        condoId
-      }
-
+      where
     });
 
 
   if (!user) {
     throw new AppError(
-      "User not found in this condominium",
+      "User not found",
       404
     );
   }
