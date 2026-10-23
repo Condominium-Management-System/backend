@@ -1,3 +1,4 @@
+import { prisma } from "../config/prisma.config.js";
 export const findUserByIdService = async (id) => {
   return prisma.user.findUnique({
     where: {
