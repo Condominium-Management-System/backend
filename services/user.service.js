@@ -762,47 +762,31 @@ export const updateUserByAdminService = async (
   // CONDO
   // ====================================================
 
-  if (
-    (value.condoId !== undefined && value.condoId) ||
-    (value.condoCode !== undefined && value.condoCode)
-  ) {
+  const isChangingCondo =
+    (value.condoId !== undefined && value.condoId !== null && value.condoId !== user.condoId) ||
+    (value.condoCode !== undefined && value.condoCode !== null && value.condoCode !== user.condoCode);
 
-    if (
-      !isSuperAdmin(requester)
-    ) {
+  if (isChangingCondo) {
+    if (!isSuperAdmin(requester)) {
       throw new AppError(
         "Only super admin can change condominium assignment",
         403
       );
     }
 
-
-    const condo =
-      await prisma.condo.findFirst({
-
-        where: {
-          ...(value.condoId ? { id: value.condoId } : { condoCode: value.condoCode }),
-
-          deletedAt:
-            null
-        }
-
-      });
-
+    const condo = await prisma.condo.findFirst({
+      where: {
+        ...(value.condoId ? { id: value.condoId } : { condoCode: value.condoCode }),
+        deletedAt: null,
+      },
+    });
 
     if (!condo) {
-      throw new AppError(
-        "Condominium not found",
-        404
-      );
+      throw new AppError("Condominium not found", 404);
     }
 
-
-    data.condoId =
-      condo.id;
-
-    data.condoCode =
-      condo.condoCode;
+    data.condoId = condo.id;
+    data.condoCode = condo.condoCode;
   }
 
 
@@ -1003,4 +987,141 @@ export const restoreUserService = async (
       adminUserSelect
 
   });
+};
+
+
+export const getMyFullProfileService = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: String(userId) },
+    include: {
+      condo: {
+        select: { id: true, condoName: true, condoCode: true, address: true, city: true },
+      },
+      bankAccounts: {
+        where: { status: { not: "inactive" } },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+      },
+      equbMemberships: {
+        where: { status: { not: "inactive" } },
+        include: {
+          equb: {
+            select: { id: true, name: true, contributionAmount: true, status: true },
+          },
+        },
+      },
+      iddirMemberships: {
+        where: { status: { not: "inactive" } },
+        include: {
+          iddir: {
+            select: { id: true, name: true, contributionAmount: true, status: true },
+          },
+        },
+      },
+      equbPayouts: {
+        include: {
+          equb: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!user || user.deletedAt) {
+    throw new AppError("User not found or account is deactivated", 404);
+  }
+
+  // Calculate authoritative financial totals directly from database records
+  const approvedPayments = await prisma.payment.findMany({
+    where: { userId: String(userId), status: "approved" },
+    select: { amount: true, paymentType: true, monthYear: true, createdAt: true },
+  });
+
+  const pendingPayments = await prisma.payment.findMany({
+    where: { userId: String(userId), status: "pending" },
+    select: { amount: true, paymentType: true },
+  });
+
+  const rejectedPayments = await prisma.payment.findMany({
+    where: { userId: String(userId), status: "rejected" },
+    select: { amount: true, paymentType: true },
+  });
+
+  const totalPaidVerified = approvedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPending = pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalRejected = rejectedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const equbVerifiedTotal = approvedPayments
+    .filter((p) => p.paymentType === "equb")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const iddirVerifiedTotal = approvedPayments
+    .filter((p) => p.paymentType === "iddir")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const serviceChargeVerifiedTotal = approvedPayments
+    .filter((p) => p.paymentType === "service_charge")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const hasPaidThisMonth = approvedPayments.some(
+    (p) => (p.monthYear && p.monthYear.includes(currentMonth)) || (p.createdAt && p.createdAt.toISOString().startsWith(currentMonth))
+  );
+
+  const maskedAccounts = (user.bankAccounts || []).map((acc) => {
+    const rawNo = acc.accountNumber || "";
+    const maskedNo = rawNo.length > 4 ? `•••• ${rawNo.slice(-4)}` : rawNo;
+    return {
+      id: acc.id,
+      accountName: acc.accountName,
+      accountNumber: acc.accountNumber,
+      maskedAccountNumber: maskedNo,
+      paymentMethod: acc.paymentMethod,
+      accountType: acc.accountType,
+      providerName: acc.providerName,
+      balance: Number(acc.balance || 0),
+      status: acc.status,
+      isDefault: acc.isDefault,
+      createdAt: acc.createdAt,
+    };
+  });
+
+  return {
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      condoId: user.condoId,
+      condoCode: user.condoCode,
+      condo: user.condo,
+      block: user.block,
+      roomNo: user.roomNo,
+      isVerified: user.isVerified,
+      profilePhoto: user.profilePhoto,
+      fan: user.fan,
+      isInEqub: user.isInEqub,
+      isInIddir: user.isInIddir,
+      isGetEqub: user.isGetEqub,
+      registerDate: user.registerDate,
+    },
+    accounts: maskedAccounts,
+    memberships: {
+      equb: user.equbMemberships,
+      iddir: user.iddirMemberships,
+    },
+    payouts: user.equbPayouts,
+    financialSummary: {
+      totalPaidVerified,
+      totalPending,
+      totalRejected,
+      equbVerifiedTotal,
+      iddirVerifiedTotal,
+      serviceChargeVerifiedTotal,
+      hasPaidThisMonth,
+      approvedPaymentsCount: approvedPayments.length,
+      pendingPaymentsCount: pendingPayments.length,
+      rejectedPaymentsCount: rejectedPayments.length,
+    },
+  };
 };
