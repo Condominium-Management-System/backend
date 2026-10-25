@@ -1,3 +1,9 @@
+const maskAccNo = (accNo) => {
+  if (!accNo) return "N/A";
+  const str = String(accNo).trim();
+  if (str.length <= 4) return str;
+  return `****${str.slice(-4)}`;
+};
 import AppError from "../errorhandler/AppError.js";
 
 import { prisma } from "../config/prisma.config.js";
@@ -2622,6 +2628,7 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
         include: { user: true },
       },
       payouts: true,
+      condo: true,
     },
   });
 
@@ -2649,14 +2656,96 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
     selectedWinner = equb.members[randomIndex];
   }
 
+  // 1. Resolve Destination Account for Winner
+  let destAccount = null;
+  if (payload.destinationAccountId) {
+    destAccount = await prisma.userAccount.findFirst({
+      where: {
+        id: payload.destinationAccountId,
+        userId: selectedWinner.userId,
+        status: "active",
+      },
+    });
+    if (!destAccount) {
+      throw new AppError("Selected destination payout account not found or is inactive for this winner", 400);
+    }
+  } else {
+    destAccount = await prisma.userAccount.findFirst({
+      where: {
+        userId: selectedWinner.userId,
+        status: "active",
+      },
+      orderBy: { isDefault: "desc" },
+    });
+  }
+
+  if (!destAccount) {
+    throw new AppError(
+      `Cannot award payout: Winner "${selectedWinner.user.fullName}" does not have an active registered bank or mobile money account. The resident must add a payout destination account (e.g. CBE or Telebirr) to their profile before Equb funds can be transferred.`,
+      400
+    );
+  }
+
+  // 2. Resolve Condominium Source Account
+  let sourceAccount = null;
+  if (payload.sourceCondoAccountId) {
+    sourceAccount = await prisma.condoAccount.findFirst({
+      where: {
+        id: payload.sourceCondoAccountId,
+        condoId: equb.condoId,
+        status: "active",
+      },
+    });
+    if (!sourceAccount) {
+      throw new AppError("Selected condominium source account not found or is inactive", 400);
+    }
+  } else {
+    sourceAccount = await prisma.condoAccount.findFirst({
+      where: {
+        condoId: equb.condoId,
+        status: "active",
+      },
+      orderBy: { isDefault: "desc" },
+    });
+  }
+
+  if (!sourceAccount) {
+    throw new AppError(
+      "No registered active source account found for this condominium. Please register a condominium source account in Condo Accounts before processing payouts.",
+      400
+    );
+  }
+
   const currentRound = (equb.payouts?.length || 0) + 1;
   const activeMembersCount = await prisma.equbMember.count({
     where: { equbId, status: "active" },
   });
   const payoutAmount = activeMembersCount * Number(equb.contributionAmount);
-  const selectionReference = `EQB-WIN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+  const selectionReference = `HX-EQB-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Record official disbursement Transaction
+    const txRecord = await tx.transaction.create({
+      data: {
+        senderId: currentUser.id,
+        senderName: `${currentUser.fullName} (Condo Admin)`,
+        senderCondoAccountId: sourceAccount.id,
+        senderAccNo: sourceAccount.accountNumber,
+        receiverId: selectedWinner.userId,
+        receiverName: selectedWinner.user.fullName,
+        receiverAccountId: destAccount.id,
+        receiverAccNo: destAccount.accountNumber,
+        paymentType: "equb",
+        paymentMethod: destAccount.paymentMethod || "bank_transfer",
+        amount: payoutAmount,
+        referenceNo: selectionReference,
+        condoId: equb.condoId,
+        status: "completed",
+        gateway: "hx",
+      },
+    });
+
+    // Create official EqubPayout record linked to transaction
     const payout = await tx.equbPayout.create({
       data: {
         equbId,
@@ -2668,11 +2757,13 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
         selectedAt: new Date(),
         paidAt: new Date(),
         status: "paid",
+        transactionId: txRecord.id,
       },
       include: {
         winner: {
           select: { id: true, fullName: true, email: true, phoneNumber: true },
         },
+        transaction: true,
       },
     });
 
@@ -2684,6 +2775,14 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
         payoutCount: { increment: 1 },
       },
     });
+
+    // Deduct from condo source account balance if balance tracking
+    if (Number(sourceAccount.balance) >= payoutAmount) {
+      await tx.condoAccount.update({
+        where: { id: sourceAccount.id },
+        data: { balance: { decrement: payoutAmount } },
+      });
+    }
 
     // Check if any eligible members remain who haven't won
     const remainingEligible = await tx.equbMember.count({
@@ -2697,7 +2796,23 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
       });
     }
 
-    return payout;
+    return {
+      ...payout,
+      sourceAccount: {
+        id: sourceAccount.id,
+        accountName: sourceAccount.accountName,
+        maskedAccountNumber: maskAccNo(sourceAccount.accountNumber),
+        providerName: sourceAccount.providerName,
+      },
+      destinationAccount: {
+        id: destAccount.id,
+        accountName: destAccount.accountName,
+        maskedAccountNumber: maskAccNo(destAccount.accountNumber),
+        providerName: destAccount.providerName,
+        paymentMethod: destAccount.paymentMethod,
+      },
+      transaction: txRecord,
+    };
   });
 
   return result;
@@ -3007,7 +3122,7 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
     throw new AppError("You do not have permission to disburse funds for this Iddir", 403);
   }
 
-  const { recipientUserId, reason } = payload;
+  const { recipientUserId, reason, claimId, sourceCondoAccountId, destinationAccountId } = payload;
   if (!recipientUserId) {
     throw new AppError("Please select a recipient member to receive the collected money", 400);
   }
@@ -3041,14 +3156,28 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
     );
   }
 
-  // Check recipient registered bank/payment account
-  const recipientAccount = await prisma.userAccount.findFirst({
-    where: {
-      userId: recipientUserId,
-      status: "active",
-    },
-    orderBy: { isDefault: "desc" },
-  });
+  // 1. Resolve Destination Account for Recipient
+  let recipientAccount = null;
+  if (destinationAccountId) {
+    recipientAccount = await prisma.userAccount.findFirst({
+      where: {
+        id: destinationAccountId,
+        userId: recipientUserId,
+        status: "active",
+      },
+    });
+    if (!recipientAccount) {
+      throw new AppError("Selected destination payout account not found or is inactive for this member", 400);
+    }
+  } else {
+    recipientAccount = await prisma.userAccount.findFirst({
+      where: {
+        userId: recipientUserId,
+        status: "active",
+      },
+      orderBy: { isDefault: "desc" },
+    });
+  }
 
   if (!recipientAccount) {
     throw new AppError(
@@ -3057,14 +3186,46 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
     );
   }
 
-  const reference = `IDDIR-DISB-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+  // 2. Resolve Condominium Source Account
+  let sourceAccount = null;
+  if (sourceCondoAccountId) {
+    sourceAccount = await prisma.condoAccount.findFirst({
+      where: {
+        id: sourceCondoAccountId,
+        condoId: iddir.condoId,
+        status: "active",
+      },
+    });
+    if (!sourceAccount) {
+      throw new AppError("Selected condominium source account not found or is inactive", 400);
+    }
+  } else {
+    sourceAccount = await prisma.condoAccount.findFirst({
+      where: {
+        condoId: iddir.condoId,
+        status: "active",
+      },
+      orderBy: { isDefault: "desc" },
+    });
+  }
+
+  if (!sourceAccount) {
+    throw new AppError(
+      "No registered active source account found for this condominium. Please register a condominium source account in Condo Accounts before processing disbursements.",
+      400
+    );
+  }
+
+  const reference = `HX-IDDIR-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
   const result = await prisma.$transaction(async (tx) => {
     // Record disbursement transaction
     const txRecord = await tx.transaction.create({
       data: {
         senderId: currentUser.id,
-        senderName: `${currentUser.fullName} (Admin)`,
+        senderName: `${currentUser.fullName} (Condo Admin)`,
+        senderCondoAccountId: sourceAccount.id,
+        senderAccNo: sourceAccount.accountNumber,
         receiverId: recipientUserId,
         receiverName: member.user.fullName,
         receiverAccountId: recipientAccount.id,
@@ -3075,6 +3236,7 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
         referenceNo: reference,
         condoId: iddir.condoId,
         status: "completed",
+        gateway: "hx",
       },
     });
 
@@ -3098,6 +3260,28 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
       },
     });
 
+    // Deduct from condo source account balance if balance tracking
+    if (Number(sourceAccount.balance) >= amountToDisburse) {
+      await tx.condoAccount.update({
+        where: { id: sourceAccount.id },
+        data: { balance: { decrement: amountToDisburse } },
+      });
+    }
+
+    // If claimId provided, update claim status
+    if (claimId) {
+      await tx.iddirClaim.update({
+        where: { id: claimId },
+        data: {
+          status: 'disbursed',
+          amountApproved: amountToDisburse,
+          decidedAt: new Date(),
+          reviewedById: currentUser.id,
+          transactionId: txRecord.id,
+        },
+      });
+    }
+
     return { updatedMember, txRecord };
   });
 
@@ -3107,9 +3291,17 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
     iddirId: iddir.id,
     iddirName: iddir.name,
     recipient: result.updatedMember.user,
+    sourceAccount: {
+      id: sourceAccount.id,
+      accountName: sourceAccount.accountName,
+      maskedAccountNumber: maskAccNo(sourceAccount.accountNumber),
+      providerName: sourceAccount.providerName,
+    },
     recipientAccount: {
+      id: recipientAccount.id,
       bankName: recipientAccount.providerName || recipientAccount.paymentMethod.toUpperCase(),
       accountNumber: recipientAccount.accountNumber,
+      maskedAccountNumber: maskAccNo(recipientAccount.accountNumber),
       accountName: recipientAccount.accountName,
     },
     amount: amountToDisburse,
@@ -3117,6 +3309,7 @@ export const adminDisburseIddirFundService = async (currentUser, iddirId, payloa
     reference,
     totalDisbursedToMember: Number(result.updatedMember.totalReceived),
     availableBalanceRemaining: remainingBalance,
+    transaction: result.txRecord,
     disbursedAt: new Date(),
   };
 };
