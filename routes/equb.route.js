@@ -1,3 +1,4 @@
+import { createAdminEqub, updateAdminEqub, deleteAdminEqub } from "../controllers/admin.controller.js";
 import express from "express";
 
 import {
@@ -6,6 +7,8 @@ import {
   getEqubByIdController,
   getPublicEqubsController,
   getPublicEqubByIdController,
+  getMyEqubsController,
+  getMyEqubByIdController,
   searchEqubsController,
   updateEqubController,
   deleteEqubController,
@@ -17,13 +20,11 @@ import { Roles } from "../config/roles.config.js";
 
 const router = express.Router();
 
-
 // PUBLIC / USER
 router.get(
   "/:condoId/equbs/public",
   getPublicEqubsController
 );
-
 
 // PUBLIC / USER
 router.get(
@@ -31,9 +32,11 @@ router.get(
   getPublicEqubByIdController
 );
 
-
 router.use(authenticate);
 
+// Resident Portal Equb Endpoints
+router.get("/my", getMyEqubsController);
+router.get("/my/:id", getMyEqubByIdController);
 
 // ADMIN GET ALL
 router.get(
@@ -45,7 +48,6 @@ router.get(
   getAllEqubsController
 );
 
-
 // ADMIN GET ALL BY CONDO
 router.get(
   "/:condoId/equbs",
@@ -56,6 +58,15 @@ router.get(
   getAllEqubsController
 );
 
+// ADMIN GET BY CONDO DIRECT
+router.get(
+  "/:condoId",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  getAllEqubsController
+);
 
 // ADMIN SEARCH ALL
 router.get(
@@ -67,7 +78,6 @@ router.get(
   searchEqubsController
 );
 
-
 // ADMIN SEARCH BY CONDO
 router.get(
   "/:condoId/equbs/search",
@@ -77,7 +87,6 @@ router.get(
   ),
   searchEqubsController
 );
-
 
 // ADMIN GET ONE
 router.get(
@@ -89,6 +98,25 @@ router.get(
   getEqubByIdController
 );
 
+// ADMIN CREATE (DIRECT)
+router.post(
+  "/",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  createAdminEqub
+);
+
+// ADMIN CREATE BY CONDO (DIRECT)
+router.post(
+  "/:condoId",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  createAdminEqub
+);
 
 // ADMIN CREATE
 router.post(
@@ -100,6 +128,15 @@ router.post(
   createEqubController
 );
 
+// ADMIN UPDATE (DIRECT)
+router.patch(
+  "/:id",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  updateAdminEqub
+);
 
 // ADMIN UPDATE
 router.patch(
@@ -111,6 +148,15 @@ router.patch(
   updateEqubController
 );
 
+// ADMIN DELETE (DIRECT)
+router.delete(
+  "/:id",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  deleteAdminEqub
+);
 
 // ADMIN DELETE
 router.delete(
@@ -121,6 +167,5 @@ router.delete(
   ),
   deleteEqubController
 );
-
 
 export default router;
