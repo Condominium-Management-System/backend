@@ -33,6 +33,22 @@ const reportInclude = {
       condoCode: true
     }
   },
+  equb: {
+    select: {
+      id: true,
+      name: true,
+      contributionAmount: true,
+      status: true
+    }
+  },
+  iddir: {
+    select: {
+      id: true,
+      name: true,
+      contributionAmount: true,
+      status: true
+    }
+  },
   responses: {
     include: {
       user: {
@@ -105,7 +121,7 @@ export const getMyReportsService = async (userId, filters = {}) => {
     };
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError("Failed to fetch reports", 500);
+    throw new AppError("Failed to fetch reports: " + error.message, 500);
   }
 };
 
@@ -249,7 +265,7 @@ export const createReportService = async (userId, data, file = null) => {
       throw new AppError("Condo ID is required to create a report", 400);
     }
 
-    const { title, description, category, priority, photoUrl } = data;
+    const { title, description, category, priority, photoUrl, equbId, iddirId } = data;
 
     if (!title || !description || !category || !priority) {
       throw new AppError("Title, description, category, and priority are required", 400);
@@ -264,6 +280,81 @@ export const createReportService = async (userId, data, file = null) => {
       }
     }
 
+    let finalEqubId = null;
+    let finalIddirId = null;
+
+    if (category === 'equb_membership') {
+      finalEqubId = equbId || null;
+      if (!finalEqubId) {
+        throw new AppError("Equb group selection is required for membership request", 400);
+      }
+      const equb = await prisma.equb.findFirst({
+        where: { id: finalEqubId, condoId: targetCondoId, deletedAt: null }
+      });
+      if (!equb) {
+        throw new AppError("The selected Equb group was not found in your condominium", 404);
+      }
+      const existingMembership = await prisma.equbMember.findUnique({
+        where: { equbId_userId: { equbId: finalEqubId, userId: user.id } }
+      });
+      if (existingMembership && existingMembership.status === 'active') {
+        throw new AppError("You are already an active participant in this Equb", 400);
+      }
+      const pendingReport = await prisma.report.findFirst({
+        where: {
+          reporterId: user.id,
+          equbId: finalEqubId,
+          category: 'equb_membership',
+          status: { in: ['reported', 'assigned', 'in_progress'] },
+          deletedAt: null
+        }
+      });
+      if (pendingReport) {
+        throw new AppError("You already have a pending membership request report for this Equb", 400);
+      }
+      await prisma.equbMember.upsert({
+        where: { equbId_userId: { equbId: finalEqubId, userId: user.id } },
+        create: { equbId: finalEqubId, userId: user.id, status: 'pending', condoId: targetCondoId },
+        update: { status: 'pending', leftAt: null }
+      });
+    }
+
+    if (category === 'iddir_membership') {
+      finalIddirId = iddirId || null;
+      if (!finalIddirId) {
+        throw new AppError("Iddir group selection is required for membership request", 400);
+      }
+      const iddir = await prisma.iddir.findFirst({
+        where: { id: finalIddirId, condoId: targetCondoId, deletedAt: null }
+      });
+      if (!iddir) {
+        throw new AppError("The selected Iddir group was not found in your condominium", 404);
+      }
+      const existingMembership = await prisma.iddirMember.findUnique({
+        where: { iddirId_userId: { iddirId: finalIddirId, userId: user.id } }
+      });
+      if (existingMembership && existingMembership.status === 'active') {
+        throw new AppError("You are already an active participant in this Iddir", 400);
+      }
+      const pendingReport = await prisma.report.findFirst({
+        where: {
+          reporterId: user.id,
+          iddirId: finalIddirId,
+          category: 'iddir_membership',
+          status: { in: ['reported', 'assigned', 'in_progress'] },
+          deletedAt: null
+        }
+      });
+      if (pendingReport) {
+        throw new AppError("You already have a pending membership request report for this Iddir", 400);
+      }
+      await prisma.iddirMember.upsert({
+        where: { iddirId_userId: { iddirId: finalIddirId, userId: user.id } },
+        create: { iddirId: finalIddirId, userId: user.id, status: 'pending' },
+        update: { status: 'pending', leftAt: null }
+      });
+    }
+
     const newReport = await prisma.report.create({
       data: {
         title: title.trim(),
@@ -271,6 +362,8 @@ export const createReportService = async (userId, data, file = null) => {
         category,
         priority,
         photoUrl: finalPhotoUrl,
+        equbId: finalEqubId,
+        iddirId: finalIddirId,
         status: "reported",
         reporterId: user.id,
         reporterRole: user.role === "super_admin" ? "super_admin" :
@@ -582,8 +675,64 @@ export const updateReportStatusService = async (userId, userRole, reportId, data
 
     if (status) {
       updateData.status = status;
-      if (status === "resolved" && !existingReport.resolvedAt) {
+      if (['resolved', 'approved'].includes(status) && !existingReport.resolvedAt) {
         updateData.resolvedAt = new Date();
+      }
+
+      // Handle Equb membership request approval/rejection
+      if (existingReport.category === 'equb_membership' && existingReport.equbId) {
+        if (['approved', 'resolved'].includes(status)) {
+          const currentMem = await prisma.equbMember.findUnique({
+            where: { equbId_userId: { equbId: existingReport.equbId, userId: existingReport.reporterId } }
+          });
+          const wasActive = currentMem?.status === 'active';
+
+          await prisma.equbMember.upsert({
+            where: { equbId_userId: { equbId: existingReport.equbId, userId: existingReport.reporterId } },
+            create: { equbId: existingReport.equbId, userId: existingReport.reporterId, status: 'active', condoId: existingReport.condoId },
+            update: { status: 'active', leftAt: null }
+          });
+
+          if (!wasActive) {
+            await prisma.equb.update({
+              where: { id: existingReport.equbId },
+              data: { noMembers: { increment: 1 } }
+            });
+          }
+        } else if (['rejected', 'closed'].includes(status)) {
+          await prisma.equbMember.updateMany({
+            where: { equbId: existingReport.equbId, userId: existingReport.reporterId },
+            data: { status: 'rejected' }
+          });
+        }
+      }
+
+      // Handle Iddir membership request approval/rejection
+      if (existingReport.category === 'iddir_membership' && existingReport.iddirId) {
+        if (['approved', 'resolved'].includes(status)) {
+          const currentMem = await prisma.iddirMember.findUnique({
+            where: { iddirId_userId: { iddirId: existingReport.iddirId, userId: existingReport.reporterId } }
+          });
+          const wasActive = currentMem?.status === 'active';
+
+          await prisma.iddirMember.upsert({
+            where: { iddirId_userId: { iddirId: existingReport.iddirId, userId: existingReport.reporterId } },
+            create: { iddirId: existingReport.iddirId, userId: existingReport.reporterId, status: 'active' },
+            update: { status: 'active', leftAt: null }
+          });
+
+          if (!wasActive) {
+            await prisma.iddir.update({
+              where: { id: existingReport.iddirId },
+              data: { noMembers: { increment: 1 } }
+            });
+          }
+        } else if (['rejected', 'closed'].includes(status)) {
+          await prisma.iddirMember.updateMany({
+            where: { iddirId: existingReport.iddirId, userId: existingReport.reporterId },
+            data: { status: 'rejected' }
+          });
+        }
       }
     }
 
