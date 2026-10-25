@@ -146,3 +146,34 @@ export const getAllCondos = asyncHandler(async (req, res) => {
     data: result
   });
 });
+
+// Get count of unread announcements
+export const getUnreadAnnouncementsCount = asyncHandler(async (req, res) => {
+  const result = await announcementService.getUnreadAnnouncementsCountService(req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Unread count retrieved successfully",
+    data: result
+  });
+});
+
+// Mark single announcement as read
+export const markAnnouncementAsRead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await announcementService.markAnnouncementAsReadService(req.user.id, id);
+  res.status(200).json({
+    success: true,
+    message: "Announcement marked as read",
+    data: result
+  });
+});
+
+// Mark all announcements as read
+export const markAllAnnouncementsAsRead = asyncHandler(async (req, res) => {
+  const result = await announcementService.markAllAnnouncementsAsReadService(req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "All announcements marked as read",
+    data: result
+  });
+});
