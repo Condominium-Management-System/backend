@@ -15,8 +15,12 @@ export const createIddirValidation = Joi.object({
   contributionAmount: Joi.number()
     .positive()
     .required(),
-});
 
+  status: Joi.string()
+    .valid("active", "inactive")
+    .default("active")
+    .optional(),
+}).options({ stripUnknown: true });
 
 export const updateIddirValidation = Joi.object({
   condoId: Joi.string()
@@ -39,8 +43,7 @@ export const updateIddirValidation = Joi.object({
   status: Joi.string()
     .valid("active", "inactive")
     .optional(),
-}).min(1);
-
+}).min(1).options({ stripUnknown: true });
 
 export const iddirIdValidation = Joi.object({
   id: Joi.string()
