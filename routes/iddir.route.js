@@ -1,9 +1,12 @@
+import { createAdminIddir, updateAdminIddir, deleteAdminIddir, adminDisburseIddirFund } from "../controllers/admin.controller.js";
 import express from "express";
 
 import {
   createIddirController,
   getPublicIddirsController,
   getPublicIddirByIdController,
+  getMyIddirsController,
+  getMyIddirByIdController,
   getIddirsController,
   getIddirByIdController,
   searchIddirsController,
@@ -22,6 +25,10 @@ const router = express.Router();
 // Public Iddirs
 
 router.use(authenticate);
+
+// Resident Portal Iddir Endpoints
+router.get("/my", getMyIddirsController);
+router.get("/my/:id", getMyIddirByIdController);
 
 router.get(
   "/users",
@@ -85,6 +92,16 @@ router.get(
   getIddirByIdController
 );
 
+// Admin create Iddir (DIRECT)
+router.post(
+  "/",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  createAdminIddir
+);
+
 // Admin create Iddir
 router.post(
   "/:condoId/iddirs",
@@ -113,6 +130,25 @@ router.delete(
     Roles.SUPER_ADMIN
   ),
   deleteIddirController
+);
+
+// Admin disburse Iddir fund to selected member
+router.post(
+  "/:iddirId/disburse",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  adminDisburseIddirFund
+);
+
+router.post(
+  "/:condoId/iddirs/:iddirId/disburse",
+  authorizeRoles(
+    Roles.CONDO_ADMIN,
+    Roles.SUPER_ADMIN
+  ),
+  adminDisburseIddirFund
 );
 
 export default router;
