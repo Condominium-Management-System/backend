@@ -9,6 +9,9 @@ import {
   deleteIddirService,
 } from "../services/iddir.service.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { prisma } from "../config/prisma.config.js";
+import AppError from "../errorhandler/appError.js";
+
 // Create Iddir
 export const createIddirController = async (
   req,
