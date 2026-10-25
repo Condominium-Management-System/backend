@@ -43,3 +43,40 @@ export const authenticate = async (req, res, next) => {
     return next(new AppError("Invalid or expired access token", 401));
   }
 };
+
+export const optionalAuth = async (req, res, next) => {
+  const authorization = req.headers.authorization;
+  if (!authorization) {
+    return next();
+  }
+
+  const [type, token] = authorization.split(" ");
+  if (type !== "Bearer" || !token) {
+    return next();
+  }
+
+  try {
+    const payload = verifyAccessToken(token);
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      condoId: payload.condoId || null,
+      condoCode: payload.condoCode || null,
+    };
+
+    if (!req.user.condoId) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { condoId: true, condoCode: true },
+      });
+      if (dbUser) {
+        req.user.condoId = dbUser.condoId;
+        req.user.condoCode = dbUser.condoCode;
+      }
+    }
+  } catch {
+    // Silently continue for optional auth
+  }
+  next();
+};
