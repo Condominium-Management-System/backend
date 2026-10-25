@@ -23,6 +23,11 @@ import { Roles } from "../config/roles.config.js";
 
 const router = express.Router();
 
+// PUBLIC CONDOMINIUM LOOKUP (For Registration and public directory)
+router.get("/", getAllCondos);
+router.get("/public", getAllCondos);
+router.get("/search", searchCondos);
+
 router.use(authenticate);
 
 // CREATE
@@ -30,18 +35,6 @@ router.post(
   "/",
   authorizeRoles(Roles.SUPER_ADMIN),
   createCondo
-);
-
-// GET ALL
-router.get(
-  "/",
-  getAllCondos
-);
-
-// SEARCH
-router.get(
-  "/search",
-  searchCondos
 );
 
 // CONDO-SPECIFIC EQUB ROUTES
