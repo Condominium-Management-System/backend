@@ -27,20 +27,28 @@ export const getAllLostFoundService = async (userId, filters = {}) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { condoId: true }
+      select: { condoId: true, role: true }
     });
 
-    if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+    let targetCondoId = user?.condoId;
+    if (user?.role === 'super_admin') {
+      targetCondoId = (filters.condoId && filters.condoId !== 'ALL') ? filters.condoId : null;
+    } else {
+      if (!targetCondoId) {
+        throw new AppError("User not associated with any condo", 400);
+      }
     }
 
     const { type, category, status, search, page = 1, limit = 20 } = filters;
     const skip = (page - 1) * limit;
 
     const where = {
-      condoId: user.condoId,
       deletedAt: null
     };
+
+    if (targetCondoId) {
+      where.condoId = targetCondoId;
+    }
 
     if (type) where.type = type;
     if (category) where.category = category;
@@ -109,19 +117,27 @@ export const getLostFoundByIdService = async (userId, itemId) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { condoId: true }
+      select: { condoId: true, role: true }
     });
 
-    if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    const where = {
+      id: itemId,
+      deletedAt: null
+    };
+
+    if (user.role !== 'super_admin') {
+      if (!user.condoId) {
+        throw new AppError("User not associated with any condo", 400);
+      }
+      where.condoId = user.condoId;
     }
 
     const item = await prisma.lostFound.findFirst({
-      where: {
-        id: itemId,
-        condoId: user.condoId,
-        deletedAt: null
-      },
+      where,
       include: {
         user: {
           select: {
@@ -169,60 +185,53 @@ export const createLostFoundService = async (userId, data, file = null) => {
       select: { 
         id: true,
         condoId: true,
-        fullName: true 
+        fullName: true,
+        role: true
       }
     });
 
-    if (!user || !user.condoId) {
+    let targetCondoId = data.condoId || user?.condoId;
+    if (!targetCondoId && user?.role === 'super_admin') {
+      const firstCondo = await prisma.condo.findFirst({ where: { deletedAt: null } });
+      targetCondoId = firstCondo?.id;
+    }
+
+    if (!targetCondoId) {
       throw new AppError("User not associated with any condo", 400);
     }
 
-    const { 
-      type, 
-      itemName, 
-      description, 
-      category, 
-      location, 
-      dateLostFound 
-    } = data;
-
-    // Handle date properly
-    let parsedDate;
-    try {
-      if (dateLostFound && typeof dateLostFound === 'string') {
-        parsedDate = new Date(dateLostFound);
-      } else if (dateLostFound instanceof Date) {
-        parsedDate = dateLostFound;
-      } else {
-        parsedDate = new Date();
-      }
-
-      if (isNaN(parsedDate.getTime())) {
-        throw new Error('Invalid date');
-      }
-    } catch (error) {
-      throw new AppError('Invalid date format. Please use YYYY-MM-DD format', 400);
+    const itemName = data.itemName || data.title;
+    if (!itemName) {
+      throw new AppError("Item name is required", 400);
     }
 
-    // Handle photo upload - Cloudinary URL
+    const { type, description, category, location, dateLostFound, date } = data;
+
+    let parsedDate = new Date();
+    const rawDate = dateLostFound || date;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        parsedDate = d;
+      }
+    }
+
     let photoUrl = null;
     if (file) {
-      // Cloudinary returns the URL in path or secure_url
       photoUrl = file.path || file.secure_url;
-      console.log('Photo uploaded to Cloudinary:', photoUrl);
     }
 
     const newItem = await prisma.lostFound.create({
       data: {
-        type,
-        itemName,
-        description,
-        category,
-        photoUrl,
-        location: location || null,
+        type: type || 'lost',
+        itemName: itemName.trim(),
+        description: description?.trim() || 'No description provided',
+        category: category || 'other',
+        location: location?.trim() || 'Condominium compound',
         dateLostFound: parsedDate,
+        photoUrl,
+        condoId: targetCondoId,
         userId: user.id,
-        condoId: user.condoId,
         status: 'open'
       },
       include: {
@@ -232,7 +241,15 @@ export const createLostFoundService = async (userId, data, file = null) => {
             fullName: true,
             email: true,
             phoneNumber: true,
-            profilePhoto: true
+            profilePhoto: true,
+            role: true
+          }
+        },
+        condo: {
+          select: {
+            id: true,
+            condoName: true,
+            condoCode: true
           }
         }
       }
@@ -240,9 +257,9 @@ export const createLostFoundService = async (userId, data, file = null) => {
 
     return newItem;
   } catch (error) {
-    console.error('Create lost/found error:', error);
+    console.error("Create lost/found error:", error);
     if (error instanceof AppError) throw error;
-    throw new AppError("Failed to create lost/found item", 500);
+    throw new AppError("Failed to create lost/found item: " + error.message, 500);
   }
 };
 
@@ -257,16 +274,24 @@ export const updateLostFoundService = async (userId, userRole, itemId, data, fil
       }
     });
 
-    if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    const where = {
+      id: itemId,
+      deletedAt: null
+    };
+
+    if (userRole !== 'super_admin' && user.role !== 'super_admin') {
+      if (!user.condoId) {
+        throw new AppError("User not associated with any condo", 400);
+      }
+      where.condoId = user.condoId;
     }
 
     const existingItem = await prisma.lostFound.findFirst({
-      where: {
-        id: itemId,
-        condoId: user.condoId,
-        deletedAt: null
-      }
+      where
     });
 
     if (!existingItem) {
@@ -274,7 +299,7 @@ export const updateLostFoundService = async (userId, userRole, itemId, data, fil
     }
 
     // Check authorization: only admin, super_admin, or owner can update
-    const isAdmin = ['admin', 'super_admin'].includes(userRole);
+    const isAdmin = ['condo_admin', 'super_admin'].includes(userRole);
     const isOwner = existingItem.userId === userId;
 
     if (!isAdmin && !isOwner) {
@@ -372,23 +397,31 @@ export const deleteLostFoundService = async (userId, userRole, itemId) => {
       }
     });
 
-    if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    const where = {
+      id: itemId,
+      deletedAt: null
+    };
+
+    if (userRole !== 'super_admin' && user.role !== 'super_admin') {
+      if (!user.condoId) {
+        throw new AppError("User not associated with any condo", 400);
+      }
+      where.condoId = user.condoId;
     }
 
     const existingItem = await prisma.lostFound.findFirst({
-      where: {
-        id: itemId,
-        condoId: user.condoId,
-        deletedAt: null
-      }
+      where
     });
 
     if (!existingItem) {
       throw new AppError("Lost/found item not found", 404);
     }
 
-    const isAdmin = ['admin', 'super_admin'].includes(userRole);
+    const isAdmin = ['condo_admin', 'super_admin'].includes(userRole);
     const isOwner = existingItem.userId === userId;
 
     if (!isAdmin && !isOwner) {
@@ -497,7 +530,7 @@ export const claimItemService = async (userId, itemId, claimData = {}) => {
 // Verify claim (admin/super_admin only)
 export const verifyClaimService = async (userId, userRole, itemId) => {
   try {
-    if (!['admin', 'super_admin'].includes(userRole)) {
+    if (!['condo_admin', 'super_admin'].includes(userRole)) {
       throw new AppError("Only admins can verify claims", 403);
     }
 
@@ -505,20 +538,29 @@ export const verifyClaimService = async (userId, userRole, itemId) => {
       where: { id: userId },
       select: { 
         condoId: true,
-        fullName: true
+        fullName: true,
+        role: true
       }
     });
 
-    if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    const where = {
+      id: itemId,
+      deletedAt: null
+    };
+
+    if (userRole !== 'super_admin' && user.role !== 'super_admin') {
+      if (!user.condoId) {
+        throw new AppError("User not associated with any condo", 400);
+      }
+      where.condoId = user.condoId;
     }
 
     const existingItem = await prisma.lostFound.findFirst({
-      where: {
-        id: itemId,
-        condoId: user.condoId,
-        deletedAt: null
-      }
+      where
     });
 
     if (!existingItem) {
@@ -574,7 +616,7 @@ export const verifyClaimService = async (userId, userRole, itemId) => {
 // Archive old items (admin/super_admin only)
 export const archiveOldItemsService = async (userId, userRole, daysOld = 30) => {
   try {
-    if (!['admin', 'super_admin'].includes(userRole)) {
+    if (!['condo_admin', 'super_admin'].includes(userRole)) {
       throw new AppError("Only admins can archive items", 403);
     }
 
