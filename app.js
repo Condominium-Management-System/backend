@@ -23,6 +23,7 @@ import lostFoundRoutes from "./routes/lostFound.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
 import promotionRoutes from "./routes/promotion.routes.js";
 import reportRoutes from "./routes/report.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
 
 import {
   globalRateLimiter,
@@ -64,14 +65,14 @@ if (process.env.NODE_ENV !== "test") {
 
 app.use(
   express.json({
-    limit: "100kb",
+    limit: "25mb",
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
-    limit: "100kb",
+    limit: "25mb",
   })
 );
 
@@ -106,6 +107,8 @@ app.use("/api/reciept", recieptRoutes);
 app.use("/api/equb-members", equbMemberRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/announcements", announcementRoutes);
+app.use("/api/chat", chatRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
