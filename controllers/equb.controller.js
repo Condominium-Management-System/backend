@@ -355,7 +355,8 @@ export const getMyEqubsController = asyncHandler(async (req, res) => {
 
       return {
         ...eq,
-        isMember: !!myMembership,
+        isMember: myMembership ? myMembership.status === "active" : false,
+        membershipStatus: myMembership ? myMembership.status : "not_member",
         myMembership: myMembership || null,
         myVerifiedContribution: totalVerifiedContribution,
         myPendingPaymentsCount: pendingPayments,
@@ -447,5 +448,74 @@ export const getMyEqubByIdController = asyncHandler(async (req, res) => {
       myPayout: myPayout || null,
       isWinner: myMembership ? myMembership.hasReceivedPayout : false,
     },
+  });
+});
+
+// RESIDENT PORTAL: REQUEST TO JOIN EQUB
+export const requestJoinEqubController = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const condoId = req.user.condoId;
+  const { id: equbId } = req.params;
+
+  if (!condoId) {
+    throw new AppError("You must be assigned to an active condominium to join an Equb", 400);
+  }
+
+  const equb = await prisma.equb.findFirst({
+    where: {
+      id: equbId,
+      condoId,
+      deletedAt: null,
+    },
+  });
+
+  if (!equb) {
+    throw new AppError("Equb not found in your condominium", 404);
+  }
+
+  const existingMember = await prisma.equbMember.findUnique({
+    where: {
+      equbId_userId: {
+        equbId,
+        userId,
+      },
+    },
+  });
+
+  if (existingMember) {
+    if (existingMember.status === "active") {
+      throw new AppError("You are already an active member of this Equb", 400);
+    }
+    if (existingMember.status === "pending") {
+      throw new AppError("Your membership request is already pending administrator review", 400);
+    }
+    const updated = await prisma.equbMember.update({
+      where: { id: existingMember.id },
+      data: {
+        status: "pending",
+        joinedAt: new Date(),
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Equb membership request submitted for administrator review",
+      data: updated,
+    });
+  }
+
+  const newMember = await prisma.equbMember.create({
+    data: {
+      equbId,
+      userId,
+      condoId,
+      status: "pending",
+    },
+  });
+
+  return res.status(201).json({
+    success: true,
+    message: "Equb membership request submitted for administrator review",
+    data: newMember,
   });
 });
