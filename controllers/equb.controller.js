@@ -11,7 +11,8 @@ import {
   deleteEqubService
 } from "../services/equb.service.js";
 
-
+import { prisma } from "../config/prisma.config.js";
+import AppError from "../errorhandler/AppError.js";
 // CREATE
 // POST /api/condos/:condoId/equbs
 
