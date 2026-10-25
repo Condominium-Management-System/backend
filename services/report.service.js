@@ -76,7 +76,11 @@ export const getMyReportsService = async (userId, filters = {}) => {
     });
 
     if (!user || !user.condoId) {
-      throw new AppError("User not associated with any condo", 400);
+      if (user?.role === 'super_admin') {
+        // Super admin has no single condo; return empty resident reports
+        return { items: [], pagination: { total: 0, page: 1, limit: parseInt(limit) || 20, totalPages: 0 } };
+      }
+      return { items: [], pagination: { total: 0, page: 1, limit: parseInt(limit) || 20, totalPages: 0 } };
     }
 
     const { status, category, priority, search, page = 1, limit = 20 } = filters;
