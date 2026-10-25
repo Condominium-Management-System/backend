@@ -1,3 +1,26 @@
+
+// Sync stored block counters with live room status
+export const syncBlockOccupancy = async (blockId) => {
+  if (!blockId) return;
+  try {
+    const rooms = await prisma.room.findMany({
+      where: { blockId: String(blockId), deletedAt: null },
+      select: { status: true },
+    });
+    const occupiedCount = rooms.filter((r) => r.status === "occupied").length;
+    const availableCount = rooms.filter((r) => r.status === "free").length;
+    await prisma.block.update({
+      where: { id: String(blockId) },
+      data: {
+        occupiedRooms: occupiedCount,
+        availableRooms: availableCount,
+      },
+    });
+  } catch (err) {
+    console.error("Error syncing block occupancy:", err);
+  }
+};
+
 import AppError from "../errorhandler/AppError.js";
 import { prisma } from "../config/prisma.config.js";
 
@@ -214,7 +237,7 @@ export const createRoomService =
         price: value.price,
         model: value.model,
         occupiedById: (value.status === "occupied" && value.occupiedById) ? String(value.occupiedById) : null,
-        status: value.status || "free"
+        status: "free"
       },
       select: adminRoomSelect
     });
@@ -438,7 +461,7 @@ export const getPublicRoomStatisticsService =
       prisma.room.count({
         where: {
           blockId: block.id,
-          status: value.status || "free",
+          status: "free",
           deletedAt: null
         }
       }),
@@ -1061,7 +1084,7 @@ export const updateRoomStatusService =
       }
     }
 
-    return prisma.room.update({
+    const updatedRoom = await prisma.room.update({
       where: {
         id: room.id
       },
@@ -1076,6 +1099,30 @@ export const updateRoomStatusService =
       select:
         adminRoomSelect
     });
+
+    // Synchronize resident assignment on user record
+    if (value.status === "occupied" && occupiedById) {
+      const blk = await prisma.block.findUnique({
+        where: { id: room.blockId },
+        select: { blockNo: true },
+      });
+      await prisma.user.update({
+        where: { id: occupiedById },
+        data: {
+          block: blk?.blockNo || undefined,
+          roomNo: room.roomNo,
+        },
+      });
+    } else if (value.status === "free" && room.occupiedById) {
+      // Clear assignment if vacated
+      await prisma.user.updateMany({
+        where: { id: room.occupiedById, roomNo: room.roomNo },
+        data: { roomNo: null },
+      });
+    }
+
+    await syncBlockOccupancy(room.blockId);
+    return updatedRoom;
   };
 
 // GET AVAILABLE ROOMS
@@ -1185,13 +1232,31 @@ export const deleteRoomService =
       );
     }
 
-    if (
-      room.status ===
-      "occupied"
-    ) {
+    if (room.status === "occupied" || room.occupiedById) {
       throw new AppError(
-        "Occupied room cannot be deleted",
-        400
+        `Cannot delete room ${room.roomNo}: It is currently occupied. Reassign or vacate the resident before deleting.`,
+        409
+      );
+    }
+
+    // Check if any resident is assigned to this room number in this condominium
+    const blk = await prisma.block.findUnique({
+      where: { id: room.blockId },
+      select: { blockNo: true },
+    });
+    const assignedResident = await prisma.user.findFirst({
+      where: {
+        condoId: room.condoId,
+        roomNo: room.roomNo,
+        ...(blk?.blockNo ? { block: blk.blockNo } : {}),
+        deletedAt: null,
+      },
+    });
+
+    if (assignedResident) {
+      throw new AppError(
+        `Cannot delete room ${room.roomNo}: Resident "${assignedResident.fullName}" is assigned to this room. Reassign the resident first.`,
+        409
       );
     }
 
@@ -1205,6 +1270,8 @@ export const deleteRoomService =
           new Date()
       }
     });
+
+    await syncBlockOccupancy(room.blockId);
 
     return {
       deleted: true,
