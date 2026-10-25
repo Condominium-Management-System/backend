@@ -1,3 +1,4 @@
+import { emitNewAnnouncement, emitAnnouncementUpdated, emitAnnouncementDeleted } from "../socket/announcement.events.js";
 // services/announcement.service.js
 import { prisma } from "../config/prisma.config.js";
 import AppError from "../errorhandler/AppError.js";
@@ -11,20 +12,14 @@ export const getAllAnnouncementsService = async (userId, filters = {}) => {
       select: { condoId: true, role: true }
     });
 
-    // Super admins can see all announcements, but need to specify condoId
     let condoId = user?.condoId;
     
-    // If super admin and no condoId, they need to specify which condo
-    if (user?.role === 'super_admin' && !condoId) {
-      if (filters.condoId) {
-        condoId = filters.condoId;
-      } else {
-        throw new AppError("Please specify a condo ID to view announcements", 400);
+    if (user?.role === 'super_admin') {
+      condoId = (filters.condoId && filters.condoId !== 'ALL') ? filters.condoId : null;
+    } else {
+      if (!condoId) {
+        throw new AppError("User not associated with any condo", 400);
       }
-    }
-
-    if (!condoId) {
-      throw new AppError("User not associated with any condo", 400);
     }
 
     const { 
@@ -36,24 +31,38 @@ export const getAllAnnouncementsService = async (userId, filters = {}) => {
     } = filters;
     const skip = (page - 1) * limit;
 
-    const where = {
-      condoId: condoId,
-      deletedAt: null,
-      OR: [
-        { expiryDate: null },
-        { expiryDate: { gt: new Date() } }
-      ]
-    };
+    const andConditions = [
+      { deletedAt: null },
+      {
+        OR: [
+          { expiryDate: null },
+          { expiryDate: { gt: new Date() } }
+        ]
+      }
+    ];
 
-    if (announcementType) where.announcementType = announcementType;
-    if (isPinned !== undefined) where.isPinned = isPinned;
+    if (condoId) {
+      andConditions.push({ condoId });
+    }
+
+    if (announcementType) {
+      andConditions.push({ announcementType });
+    }
+
+    if (isPinned !== undefined) {
+      andConditions.push({ isPinned: isPinned === 'true' || isPinned === true });
+    }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { body: { contains: search, mode: 'insensitive' } }
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { body: { contains: search, mode: 'insensitive' } }
+        ]
+      });
     }
+
+    const where = { AND: andConditions };
 
     const [items, total] = await Promise.all([
       prisma.announcement.findMany({
@@ -178,7 +187,6 @@ export const createAnnouncementService = async (userId, data, file = null) => {
       }
     });
 
-    // Check if user is admin or super_admin
     if (!['condo_admin', 'super_admin'].includes(user?.role)) {
       throw new AppError("Only admins can create announcements", 403);
     }
@@ -190,29 +198,58 @@ export const createAnnouncementService = async (userId, data, file = null) => {
       expiryDate, 
       isPinned, 
       imageUrl,
-      condoId // Allow super admin to specify condoId
+      condoId,
+      condoIds 
     } = data;
 
-    let targetCondoId = condoId || user?.condoId;
+    let targetCondoIds = [];
 
-    // Super admin must specify condoId
-    if (user?.role === 'super_admin' && !targetCondoId) {
-      throw new AppError("Super admin must specify a condo ID for the announcement", 400);
+    if (user?.role === 'super_admin') {
+      let requested = [];
+      if (Array.isArray(condoIds)) {
+        requested = condoIds;
+      } else if (typeof condoIds === 'string') {
+        try {
+          const parsed = JSON.parse(condoIds);
+          requested = Array.isArray(parsed) ? parsed : [condoIds];
+        } catch {
+          requested = [condoIds];
+        }
+      } else if (condoId) {
+        requested = [condoId];
+      }
+
+      if (requested.includes('ALL') || requested.length === 0) {
+        const allCondos = await prisma.condo.findMany({
+          where: { deletedAt: null },
+          select: { id: true }
+        });
+        targetCondoIds = allCondos.map(c => c.id);
+      } else {
+        targetCondoIds = requested.filter(id => id && id !== 'ALL');
+      }
+
+      if (targetCondoIds.length === 0) {
+        throw new AppError("Please select at least one condominium", 400);
+      }
+    } else {
+      if (!user?.condoId) {
+        throw new AppError("Admin not associated with any condo", 400);
+      }
+      targetCondoIds = [user.condoId];
     }
 
-    // Regular admin must be associated with a condo
-    if (user?.role === 'condo_admin' && !targetCondoId) {
-      throw new AppError("Admin not associated with any condo", 400);
-    }
-
-    // Verify the condo exists
-    const condo = await prisma.condo.findUnique({
-      where: { id: targetCondoId }
+    // Verify target condos exist
+    const validCondos = await prisma.condo.findMany({
+      where: { id: { in: targetCondoIds }, deletedAt: null },
+      select: { id: true, condoName: true }
     });
 
-    if (!condo) {
-      throw new AppError("Condo not found", 404);
+    if (validCondos.length === 0) {
+      throw new AppError("No valid condominiums found for announcement", 404);
     }
+
+    const validIds = validCondos.map(c => c.id);
 
     // Handle image upload if provided
     let finalImageUrl = imageUrl || null;
@@ -220,41 +257,54 @@ export const createAnnouncementService = async (userId, data, file = null) => {
       finalImageUrl = file.path || file.secure_url;
     }
 
-    const newAnnouncement = await prisma.announcement.create({
-      data: {
-        title,
-        body,
-        announcementType,
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        isPinned: isPinned || false,
-        imageUrl: finalImageUrl,
-        createdById: user.id,
-        createdByRole: user.role === 'super_admin' ? 'super_admin' : 'admin',
-        condoId: targetCondoId
-        // isPublic removed - all announcements visible to condo members
-      },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phoneNumber: true,
-            profilePhoto: true,
-            role: true
+    // Create announcements across all selected condominiums in a transaction
+    const createdList = await prisma.$transaction(
+      validIds.map(cId =>
+        prisma.announcement.create({
+          data: {
+            title,
+            body,
+            announcementType,
+            expiryDate: expiryDate ? new Date(expiryDate) : null,
+            isPinned: isPinned || false,
+            imageUrl: finalImageUrl,
+            createdById: user.id,
+            createdByRole: user.role === 'super_admin' ? 'super_admin' : 'admin',
+            condoId: cId
+          },
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phoneNumber: true,
+                profilePhoto: true,
+                role: true
+              }
+            },
+            condo: {
+              select: {
+                id: true,
+                condoName: true,
+                condoCode: true
+              }
+            }
           }
-        },
-        condo: {
-          select: {
-            id: true,
-            condoName: true,
-            condoCode: true
-          }
-        }
+        })
+      )
+    );
+
+    // Emit real-time Socket.IO notifications for each condominium
+    createdList.forEach(item => {
+      try {
+        emitNewAnnouncement(item.condoId, item);
+      } catch (err) {
+        console.warn("Could not emit announcement socket:", err.message);
       }
     });
 
-    return newAnnouncement;
+    return createdList.length === 1 ? createdList[0] : createdList;
   } catch (error) {
     console.error('Create announcement error:', error);
     if (error instanceof AppError) throw error;
@@ -331,6 +381,11 @@ export const updateAnnouncementService = async (userId, userRole, announcementId
       }
     });
 
+    try {
+      emitAnnouncementUpdated(updatedAnnouncement.condoId, updatedAnnouncement);
+    } catch (err) {
+      console.warn("Could not emit announcement updated socket:", err.message);
+    }
     return updatedAnnouncement;
   } catch (error) {
     console.error('Update announcement error:', error);
@@ -378,6 +433,11 @@ export const deleteAnnouncementService = async (userId, userRole, announcementId
       }
     });
 
+    try {
+      emitAnnouncementDeleted(existingAnnouncement.condoId, announcementId);
+    } catch (err) {
+      console.warn("Could not emit announcement deleted socket:", err.message);
+    }
     return { message: "Announcement deleted successfully", id: announcementId };
   } catch (error) {
     if (error instanceof AppError) throw error;
