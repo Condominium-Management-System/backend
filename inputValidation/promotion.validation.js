@@ -3,130 +3,73 @@ import Joi from "joi";
 
 // Validation schema for creating a promotion (Admin only)
 export const createPromotionValidation = Joi.object({
-  title: Joi.string().trim().required().min(3).max(200).messages({
+  title: Joi.string().trim().required().min(1).max(255).messages({
     'any.required': 'Title is required',
     'string.empty': 'Title cannot be empty',
-    'string.min': 'Title must be at least 3 characters',
-    'string.max': 'Title cannot exceed 200 characters'
   }),
 
-  description: Joi.string().trim().required().min(10).max(5000).messages({
+  description: Joi.string().trim().required().min(1).max(10000).messages({
     'any.required': 'Description is required',
     'string.empty': 'Description cannot be empty',
-    'string.min': 'Description must be at least 10 characters',
-    'string.max': 'Description cannot exceed 5000 characters'
   }),
 
-  type: Joi.string().trim().required().valid('shop', 'technical', 'service', 'product', 'event', 'other').messages({
-    'any.required': 'Type is required',
-    'string.empty': 'Type cannot be empty',
-    'any.only': 'Invalid promotion type'
-  }),
+  type: Joi.string().trim().optional().valid('shop', 'technical', 'service', 'product', 'event', 'other').default('shop'),
 
-  category: Joi.string().trim().optional().allow(null, '').max(50).messages({
-    'string.max': 'Category cannot exceed 50 characters'
-  }),
+  category: Joi.string().trim().optional().allow(null, '').max(100),
 
-  price: Joi.number().positive().required().messages({
+  price: Joi.number().min(0).required().messages({
     'any.required': 'Price is required',
     'number.base': 'Price must be a number',
-    'number.positive': 'Price must be greater than 0'
   }),
 
-  businessName: Joi.string().trim().required().min(2).max(100).messages({
+  businessName: Joi.string().trim().required().min(1).max(150).messages({
     'any.required': 'Business name is required',
     'string.empty': 'Business name cannot be empty',
-    'string.min': 'Business name must be at least 2 characters',
-    'string.max': 'Business name cannot exceed 100 characters'
   }),
 
-  contactPerson: Joi.string().trim().optional().allow(null, '').max(100).messages({
-    'string.max': 'Contact person cannot exceed 100 characters'
-  }),
+  contactPerson: Joi.string().trim().optional().allow(null, '').max(150),
 
-  contactNumber: Joi.string().trim().required().pattern(/^(09|07)\d{8}$|^\+251[79]\d{8}$/).messages({
+  contactNumber: Joi.string().trim().required().min(3).max(50).messages({
     'any.required': 'Contact number is required',
     'string.empty': 'Contact number cannot be empty',
-    'string.pattern.base': 'Invalid phone number format'
   }),
 
-  email: Joi.string().trim().optional().email().allow(null, '').messages({
-    'string.email': 'Invalid email address'
+  email: Joi.string().trim().optional().allow(null, '').email().allow(''),
+
+  websiteUrl: Joi.string().trim().optional().allow(null, ''),
+
+  expiresAt: Joi.alternatives().try(
+    Joi.date(),
+    Joi.string()
+  ).required().messages({
+    'any.required': 'Expiry date is required'
   }),
 
-  websiteUrl: Joi.string().trim().optional().uri().allow(null, '').messages({
-    'string.uri': 'Invalid website URL'
-  }),
-
-  expiresAt: Joi.date().iso().required().greater('now').messages({
-    'any.required': 'Expiry date is required',
-    'date.base': 'Invalid date format',
-    'date.iso': 'Date must be in ISO format',
-    'date.greater': 'Expiry date must be in the future'
-  }),
-
-  condoId: Joi.string().trim().optional().uuid().allow(null).messages({
-    'string.guid': 'Invalid condo ID format'
-  })
-});
+  condoId: Joi.string().trim().optional().allow(null, '', 'ALL', 'GLOBAL'),
+  condoIds: Joi.alternatives().try(
+    Joi.array().items(Joi.string().trim()),
+    Joi.string().trim()
+  ).optional().allow(null)
+}).unknown(true);
 
 // Validation schema for updating a promotion (Admin only)
 export const updatePromotionValidation = Joi.object({
-  title: Joi.string().trim().optional().min(3).max(200).messages({
-    'string.min': 'Title must be at least 3 characters',
-    'string.max': 'Title cannot exceed 200 characters'
-  }),
-
-  description: Joi.string().trim().optional().min(10).max(5000).messages({
-    'string.min': 'Description must be at least 10 characters',
-    'string.max': 'Description cannot exceed 5000 characters'
-  }),
-
-  type: Joi.string().trim().optional().valid('shop', 'technical', 'service', 'product', 'event', 'other').messages({
-    'any.only': 'Invalid promotion type'
-  }),
-
-  category: Joi.string().trim().optional().allow(null, '').max(50),
-
-  price: Joi.number().positive().optional().messages({
-    'number.base': 'Price must be a number',
-    'number.positive': 'Price must be greater than 0'
-  }),
-
-  businessName: Joi.string().trim().optional().min(2).max(100),
-
-  contactPerson: Joi.string().trim().optional().allow(null, '').max(100),
-
-  contactNumber: Joi.string().trim().optional().pattern(/^(09|07)\d{8}$|^\+251[79]\d{8}$/).messages({
-    'string.pattern.base': 'Invalid phone number format'
-  }),
-
-  email: Joi.string().trim().optional().email().allow(null, '').messages({
-    'string.email': 'Invalid email address'
-  }),
-
-  websiteUrl: Joi.string().trim().optional().uri().allow(null, '').messages({
-    'string.uri': 'Invalid website URL'
-  }),
-
-  expiresAt: Joi.date().iso().optional().greater('now').messages({
-    'date.base': 'Invalid date format',
-    'date.iso': 'Date must be in ISO format',
-    'date.greater': 'Expiry date must be in the future'
-  }),
-
-  status: Joi.string().trim().optional().valid('pending', 'approved', 'active', 'expired', 'rejected', 'cancelled').messages({
-    'any.only': 'Invalid status'
-  }),
-
+  title: Joi.string().trim().optional().min(1).max(255),
+  description: Joi.string().trim().optional().min(1).max(10000),
+  type: Joi.string().trim().optional().valid('shop', 'technical', 'service', 'product', 'event', 'other'),
+  category: Joi.string().trim().optional().allow(null, '').max(100),
+  price: Joi.number().min(0).optional(),
+  businessName: Joi.string().trim().optional().min(1).max(150),
+  contactPerson: Joi.string().trim().optional().allow(null, '').max(150),
+  contactNumber: Joi.string().trim().optional().min(3).max(50),
+  email: Joi.string().trim().optional().allow(null, '').email().allow(''),
+  websiteUrl: Joi.string().trim().optional().allow(null, ''),
+  expiresAt: Joi.alternatives().try(Joi.date(), Joi.string()).optional(),
+  status: Joi.string().trim().optional().valid('pending', 'approved', 'active', 'expired', 'rejected', 'cancelled'),
   isActive: Joi.boolean().optional(),
-
-  rejectionReason: Joi.string().trim().optional().max(500).messages({
-    'string.max': 'Rejection reason cannot exceed 500 characters'
-  })
-}).min(1).messages({
-  'object.min': 'At least one field must be provided for update'
-});
+  condoId: Joi.string().trim().optional().allow(null, '', 'ALL', 'GLOBAL'),
+  rejectionReason: Joi.string().trim().optional().max(500)
+}).unknown(true);
 
 // Validation schema for approving/rejecting a promotion (Admin only)
 export const reviewPromotionValidation = Joi.object({
@@ -148,13 +91,14 @@ export const reviewPromotionValidation = Joi.object({
 
 // Validation schema for query parameters (Public)
 export const getPromotionsQueryValidation = Joi.object({
+  condoId: Joi.string().trim().optional().allow('ALL', ''),
   type: Joi.string().trim().optional().valid('shop', 'technical', 'service', 'product', 'event', 'other').messages({
     'any.only': 'Invalid promotion type'
   }),
 
   category: Joi.string().trim().optional().max(50),
 
-  status: Joi.string().trim().optional().valid('active', 'expired', 'all').default('active'),
+  status: Joi.string().trim().optional().valid('active', 'expired', 'all', 'pending', 'approved', 'rejected', 'cancelled').default('active'),
 
   search: Joi.string().trim().optional().max(100).messages({
     'string.max': 'Search term cannot exceed 100 characters'
@@ -166,13 +110,13 @@ export const getPromotionsQueryValidation = Joi.object({
     'number.min': 'Page must be at least 1'
   }),
 
-  limit: Joi.number().integer().optional().min(1).max(50).default(20).messages({
+  limit: Joi.number().integer().optional().min(1).max(500).default(20).messages({
     'number.base': 'Limit must be a number',
     'number.integer': 'Limit must be an integer',
     'number.min': 'Limit must be at least 1',
-    'number.max': 'Limit cannot exceed 50'
+    'number.max': 'Limit cannot exceed 500'
   })
-});
+}).unknown(true);
 
 // Validation schema for ID parameter
 export const idParamValidation = Joi.object({
