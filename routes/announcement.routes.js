@@ -31,6 +31,23 @@ router.get(
   announcementController.getPinnedAnnouncements
 );
 
+// Unread tracking routes
+router.get(
+  "/unread-count",
+  announcementController.getUnreadAnnouncementsCount
+);
+
+router.post(
+  "/mark-all-read",
+  announcementController.markAllAnnouncementsAsRead
+);
+
+router.post(
+  "/:id/read",
+  validateParams(idParamValidation),
+  announcementController.markAnnouncementAsRead
+);
+
 router.get(
   "/:id",
   validateParams(idParamValidation),
