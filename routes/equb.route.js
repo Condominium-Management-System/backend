@@ -9,6 +9,7 @@ import {
   getPublicEqubByIdController,
   getMyEqubsController,
   getMyEqubByIdController,
+  requestJoinEqubController,
   searchEqubsController,
   updateEqubController,
   deleteEqubController,
@@ -37,6 +38,7 @@ router.use(authenticate);
 // Resident Portal Equb Endpoints
 router.get("/my", getMyEqubsController);
 router.get("/my/:id", getMyEqubByIdController);
+router.post("/:id/join", requestJoinEqubController);
 
 // ADMIN GET ALL
 router.get(

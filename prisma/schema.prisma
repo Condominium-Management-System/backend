@@ -151,6 +151,8 @@ enum ReportCategory {
   security
   noise
   other
+  equb_membership
+  iddir_membership
 }
 
 enum ReportStatus {
@@ -159,6 +161,8 @@ enum ReportStatus {
   in_progress
   resolved
   closed
+  approved
+  rejected
 }
 
 enum ReportPriority {
@@ -268,6 +272,7 @@ model User {
   receivedMessages     ChatMessage[]    @relation("ChatReceiver")
   promotionsPosted     Promotion[]      @relation("PromotionPoster")
   promotionsReviewed   Promotion[]      @relation("PromotionReviewer")
+  announcementReads    AnnouncementRead[]
   reportResponses      ReportResponse[]
   createdEqubs         Equb[]           @relation("EqubCreator")
   createdIddirs        Iddir[]          @relation("IddirCreator")
@@ -376,6 +381,7 @@ model Equb {
   members            EqubMember[]
   payouts            EqubPayout[]
   payments           Payment[]
+  reports            Report[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   deletedAt          DateTime?
@@ -449,6 +455,7 @@ model Iddir {
   members            IddirMember[]
   claims             IddirClaim[]
   payments           Payment[]
+  reports            Report[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   deletedAt          DateTime?
@@ -720,6 +727,8 @@ model Announcement {
 
   isPublic Boolean @default(true)
 
+  reads    AnnouncementRead[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -754,6 +763,12 @@ model Report {
   resolvedAt      DateTime?
   resolutionNotes String?   @db.Text
 
+  equbId          String?
+  equb            Equb?          @relation(fields: [equbId], references: [id], onDelete: SetNull)
+
+  iddirId         String?
+  iddir           Iddir?         @relation(fields: [iddirId], references: [id], onDelete: SetNull)
+
   responses ReportResponse[]
 
   createdAt DateTime  @default(now())
@@ -763,6 +778,8 @@ model Report {
   @@index([condoId])
   @@index([reporterId])
   @@index([assignedToId])
+  @@index([equbId])
+  @@index([iddirId])
   @@index([status])
   @@index([priority])
   @@index([deletedAt])
@@ -949,4 +966,18 @@ model IddirClaim {
   @@index([userId])
   @@index([status])
   @@map("iddir_claims")
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId], name: "uq_announcement_user_read")
+  @@index([userId])
+  @@index([announcementId])
+  @@map("announcement_reads")
 }

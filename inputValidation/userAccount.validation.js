@@ -8,7 +8,8 @@ export const createUserAccountValidation = Joi.object({
       "cash",
       "bank_transfer",
       "card",
-      "chapa"
+      "chapa",
+      "others"
     )
     .required()
     .messages({
@@ -17,8 +18,7 @@ export const createUserAccountValidation = Joi.object({
     }),
 
   accountType: Joi.string()
-    .valid("bank", "mobile_money", "wallet")
-    .default("bank"),
+    .valid("bank", "mobile_money", "wallet"),
 
   accountName: Joi.string()
     .trim()

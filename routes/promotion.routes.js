@@ -1,6 +1,6 @@
 import express from "express";
 import * as promotionController from "../controllers/promotion.controller.js";
-import { authenticate } from "../middleware/auth.middleware.js";
+import { authenticate, optionalAuth } from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
 import { optionalUpload } from "../middleware/optionalUpload.middleware.js";
 import upload  from "../middleware/upload.middleware.js";
@@ -39,6 +39,7 @@ const handlePromotionUpload = (req, res, next) => {
 
 router.get(
   "/",
+  optionalAuth,
   validateQuery(getPromotionsQueryValidation),
   promotionController.getAllPromotions
 );

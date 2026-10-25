@@ -272,3 +272,56 @@ export const setDefaultUserAccountService = async (userId, accountId) => {
     isDefault: true,
   };
 };
+
+// GET RECIPIENT ACCOUNTS (Admin only, scoped to condominium)
+export const getRecipientAccountsService = async (currentUser, recipientUserId) => {
+  const recipient = await prisma.user.findUnique({
+    where: { id: recipientUserId },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phoneNumber: true,
+      condoId: true,
+      role: true,
+    },
+  });
+
+  if (!recipient) {
+    throw new AppError("Recipient user not found", 404);
+  }
+
+  // Enforce condominium scoping for condo_admin
+  if (currentUser.role === 'condo_admin') {
+    if (!currentUser.condoId || recipient.condoId !== currentUser.condoId) {
+      throw new AppError("You do not have permission to view accounts for residents outside your condominium", 403);
+    }
+  }
+
+  const accounts = await prisma.userAccount.findMany({
+    where: {
+      userId: recipientUserId,
+      status: "active",
+    },
+    orderBy: [
+      { isDefault: "desc" },
+      { createdAt: "desc" },
+    ],
+  });
+
+  return accounts.map(acc => ({
+    id: acc.id,
+    userId: acc.userId,
+    accountName: acc.accountName,
+    accountNumber: acc.accountNumber,
+    maskedAccountNumber: acc.accountNumber && acc.accountNumber.length > 4
+      ? `****${acc.accountNumber.slice(-4)}`
+      : acc.accountNumber,
+    paymentMethod: acc.paymentMethod,
+    accountType: acc.accountType,
+    providerName: acc.providerName || (acc.paymentMethod === 'cbe' ? 'Commercial Bank of Ethiopia' : acc.paymentMethod === 'telebirr' ? 'Telebirr' : 'Bank Transfer'),
+    isDefault: acc.isDefault,
+    status: acc.status,
+    createdAt: acc.createdAt,
+  }));
+};

@@ -7,6 +7,11 @@ import {
   getPublicIddirByIdController,
   getMyIddirsController,
   getMyIddirByIdController,
+  requestJoinIddirController,
+  submitIddirClaimController,
+  getMyIddirClaimsController,
+  getIddirClaimByIdController,
+  reviewIddirClaimController,
   getIddirsController,
   getIddirByIdController,
   searchIddirsController,
@@ -28,7 +33,13 @@ router.use(authenticate);
 
 // Resident Portal Iddir Endpoints
 router.get("/my", getMyIddirsController);
+router.get("/my", getMyIddirsController);
+router.get("/my-claims", getMyIddirClaimsController);
+router.get("/claims/:id", getIddirClaimByIdController);
 router.get("/my/:id", getMyIddirByIdController);
+router.post("/:id/join", requestJoinIddirController);
+router.post("/:id/claims", submitIddirClaimController);
+router.patch("/claims/:id/review", authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN), reviewIddirClaimController);
 
 router.get(
   "/users",

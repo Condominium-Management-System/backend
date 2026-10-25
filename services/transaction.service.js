@@ -235,6 +235,7 @@ export const getAllTransactions = async (
     paymentMethod,
     gateway,
     condoId,
+    condoAccountId,
     senderId,
     receiverId,
     search,
@@ -295,8 +296,19 @@ export const getAllTransactions = async (
   }
 
   if (receiverId) {
-    where.receiverId =
-      receiverId;
+    where.receiverId = receiverId;
+  }
+
+  if (condoAccountId) {
+    where.AND = [
+      ...(where.AND || []),
+      {
+        OR: [
+          { senderCondoAccountId: condoAccountId },
+          { receiverCondoAccountId: condoAccountId },
+        ],
+      },
+    ];
   }
 
   if (status) {

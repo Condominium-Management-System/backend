@@ -1002,7 +1002,6 @@ export const getMyFullProfileService = async (userId) => {
         orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
       },
       equbMemberships: {
-        where: { status: { not: "inactive" } },
         include: {
           equb: {
             select: { id: true, name: true, contributionAmount: true, status: true },
@@ -1010,7 +1009,6 @@ export const getMyFullProfileService = async (userId) => {
         },
       },
       iddirMemberships: {
-        where: { status: { not: "inactive" } },
         include: {
           iddir: {
             select: { id: true, name: true, contributionAmount: true, status: true },
@@ -1050,13 +1048,23 @@ export const getMyFullProfileService = async (userId) => {
   const totalPending = pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0);
   const totalRejected = rejectedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
 
-  const equbVerifiedTotal = approvedPayments
+  const equbPaymentsTotal = approvedPayments
     .filter((p) => p.paymentType === "equb")
     .reduce((sum, p) => sum + Number(p.amount), 0);
+  const equbMembersPaidTotal = (user.equbMemberships || []).reduce(
+    (sum, m) => sum + Number(m.totalPaid || 0),
+    0
+  );
+  const equbVerifiedTotal = Math.max(equbPaymentsTotal, equbMembersPaidTotal);
 
-  const iddirVerifiedTotal = approvedPayments
+  const iddirPaymentsTotal = approvedPayments
     .filter((p) => p.paymentType === "iddir")
     .reduce((sum, p) => sum + Number(p.amount), 0);
+  const iddirMembersPaidTotal = (user.iddirMemberships || []).reduce(
+    (sum, m) => sum + Number(m.totalPaid || 0),
+    0
+  );
+  const iddirVerifiedTotal = Math.max(iddirPaymentsTotal, iddirMembersPaidTotal);
 
   const serviceChargeVerifiedTotal = approvedPayments
     .filter((p) => p.paymentType === "service_charge")
@@ -1067,9 +1075,9 @@ export const getMyFullProfileService = async (userId) => {
     (p) => (p.monthYear && p.monthYear.includes(currentMonth)) || (p.createdAt && p.createdAt.toISOString().startsWith(currentMonth))
   );
 
-  const maskedAccounts = (user.bankAccounts || []).map((acc) => {
+    const maskedAccounts = (user.bankAccounts || []).map((acc) => {
     const rawNo = acc.accountNumber || "";
-    const maskedNo = rawNo.length > 4 ? `•••• ${rawNo.slice(-4)}` : rawNo;
+    const maskedNo = rawNo.length > 4 ? `****${rawNo.slice(-4)}` : rawNo;
     return {
       id: acc.id,
       accountName: acc.accountName,
@@ -1106,10 +1114,14 @@ export const getMyFullProfileService = async (userId) => {
       registerDate: user.registerDate,
     },
     accounts: maskedAccounts,
+    bankAccounts: maskedAccounts,
+    defaultPayoutAccount: maskedAccounts.find((a) => a.isDefault) || maskedAccounts[0] || null,
     memberships: {
       equb: user.equbMemberships,
       iddir: user.iddirMemberships,
     },
+    equbMemberships: user.equbMemberships,
+    iddirMemberships: user.iddirMemberships,
     payouts: user.equbPayouts,
     financialSummary: {
       totalPaidVerified,
@@ -1123,5 +1135,12 @@ export const getMyFullProfileService = async (userId) => {
       pendingPaymentsCount: pendingPayments.length,
       rejectedPaymentsCount: rejectedPayments.length,
     },
+    totalPaidVerified,
+    totalPending,
+    totalRejected,
+    equbVerifiedTotal,
+    iddirVerifiedTotal,
+    serviceChargeVerifiedTotal,
+    hasPaidThisMonth,
   };
 };

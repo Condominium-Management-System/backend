@@ -253,9 +253,9 @@ export const createPromotionService = async (userId, data, files = null) => {
             imageUrl,
             additionalImages,
             expiresAt: new Date(expiresAt),
-            status: user.role === 'super_admin' ? 'active' : 'pending',
+            status: 'active',
           isActive: true,
-          publishedAt: user.role === 'super_admin' ? new Date() : null,
+          publishedAt: new Date(),
             postedById: user.id,
             postedByRole: user.role === 'super_admin' ? 'super_admin' : 'admin',
             condoId: cId

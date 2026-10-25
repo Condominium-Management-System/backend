@@ -40,6 +40,7 @@ export const transactionQueryValidation = Joi.object({
   ),
 
   condoId: Joi.string().uuid(),
+  condoAccountId: Joi.string().uuid(),
 
   senderId: Joi.string().uuid(),
 

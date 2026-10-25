@@ -6,6 +6,11 @@ import asyncHandler from "../utils/asyncHandler.js";
 export const getAllPromotions = asyncHandler(async (req, res) => {
   const { type, category, status, search, page, limit, condoId } = req.query;
 
+  let effectiveCondoId = condoId;
+  if (req.user && req.user.role === 'resident' && req.user.condoId) {
+    effectiveCondoId = req.user.condoId;
+  }
+
   const result = await promotionService.getAllPromotionsService({
     type,
     category,
@@ -13,7 +18,7 @@ export const getAllPromotions = asyncHandler(async (req, res) => {
     search,
     page,
     limit,
-    condoId
+    condoId: effectiveCondoId
   });
 
   res.status(200).json({
