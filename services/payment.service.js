@@ -190,6 +190,52 @@ export const createPaymentService = async (userId, payload, requester = null) =>
     );
   }
 
+    // 5b. Resolve Condominium Destination Account
+  let condoDestination = await prisma.condoAccount.findFirst({
+    where: {
+      condoId: user.condoId,
+      status: "active",
+      paymentMethod: resolvedPaymentMethod,
+      isDefault: true,
+    },
+  });
+
+  if (!condoDestination) {
+    condoDestination = await prisma.condoAccount.findFirst({
+      where: {
+        condoId: user.condoId,
+        status: "active",
+        paymentMethod: resolvedPaymentMethod,
+      },
+    });
+  }
+
+  if (!condoDestination) {
+    condoDestination = await prisma.condoAccount.findFirst({
+      where: {
+        condoId: user.condoId,
+        status: "active",
+        isDefault: true,
+      },
+    });
+  }
+
+  if (!condoDestination) {
+    condoDestination = await prisma.condoAccount.findFirst({
+      where: {
+        condoId: user.condoId,
+        status: "active",
+      },
+    });
+  }
+
+  if (!condoDestination) {
+    throw new AppError(
+      `Your condominium (${user.condo.condoName}) does not have an active destination account configured. Please contact administration.`,
+      400
+    );
+  }
+
   // 6. Execute atomic transaction creation
   const payment = await prisma.$transaction(async (tx) => {
     const transaction = await tx.transaction.create({
@@ -202,7 +248,9 @@ export const createPaymentService = async (userId, payload, requester = null) =>
         senderName: selectedAccount
           ? selectedAccount.accountName
           : user.fullName,
-        receiverName: user.condo.condoName,
+        receiverCondoAccountId: condoDestination.id,
+        receiverAccNo: condoDestination.accountNumber,
+        receiverName: `${user.condo.condoName} (${condoDestination.accountName})`,
         hxAccountId: hxAccount.id,
         referenceNo,
         stamp: referenceNo,
@@ -615,6 +663,16 @@ export const approvePaymentService = async (adminUser, paymentId, adminNotes) =>
           status: "completed",
         },
       });
+
+      // Credit the destination condominium account operational fund
+      if (payment.transaction?.receiverCondoAccountId) {
+        await tx.condoAccount.update({
+          where: { id: payment.transaction.receiverCondoAccountId },
+          data: {
+            balance: { increment: payment.amount },
+          },
+        });
+      }
 
       await tx.serviceFee.updateMany({
         where: {
