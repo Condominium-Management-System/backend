@@ -272,24 +272,19 @@ export const getAllEqubsService = async (
   
 
   if (isCondoAdmin(requester)) {
-
-    if (!condoId) {
+    const targetCondoId = condoId || requester.condoId;
+    if (!targetCondoId) {
       throw new AppError(
         "Condo ID is required",
         400
       );
     }
-
-    // This guarantees condo admin can only access
-    // their own condominium
     checkCondoAccess(
       requester,
-      condoId
+      targetCondoId
     );
-
     const where = {
-
-      condoId: String(condoId),
+      condoId: String(targetCondoId),
 
       deletedAt: null,
 
