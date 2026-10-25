@@ -9,7 +9,8 @@ import {
   updateUserRoleService,
   updateUserByAdminService,
   deleteUserService,
-  restoreUserService
+  restoreUserService,
+  getMyFullProfileService
 } from "../services/user.service.js";
 
 
@@ -311,3 +312,13 @@ export const restoreUser = asyncHandler(
 
   }
 );
+
+
+// GET MY FULL PROFILE (Resident Portal)
+export const getMyFullProfile = asyncHandler(async (req, res) => {
+  const data = await getMyFullProfileService(req.user.id);
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
