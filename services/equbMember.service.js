@@ -252,12 +252,7 @@ export const addEqubMemberService = async (
       },
     });
 
-  if (activeMembership) {
-    throw new AppError(
-      "User is already an active member of another Equb",
-      409
-    );
-  }
+  // Multiple Equb memberships allowed by policy
 
   // create equb member
   const member =
