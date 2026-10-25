@@ -17,7 +17,7 @@ export const createReportValidation = Joi.object({
     'string.max': 'Description cannot exceed 5000 characters'
   }),
 
-  category: Joi.string().trim().required().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other').messages({
+  category: Joi.string().trim().required().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other', 'equb_membership', 'iddir_membership').messages({
     'any.required': 'Category is required',
     'string.empty': 'Category cannot be empty',
     'any.only': 'Invalid category'
@@ -31,8 +31,10 @@ export const createReportValidation = Joi.object({
 
   photoUrl: Joi.string().trim().optional().uri().allow(null, '').messages({
     'string.uri': 'Invalid photo URL'
-  })
-});
+  }),
+  equbId: Joi.string().trim().optional().allow(null, ''),
+  iddirId: Joi.string().trim().optional().allow(null, '')
+}).unknown(true);
 
 // Validation schema for updating a report (Reporter or Admin)
 export const updateReportValidation = Joi.object({
@@ -46,7 +48,7 @@ export const updateReportValidation = Joi.object({
     'string.max': 'Description cannot exceed 5000 characters'
   }),
 
-  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other').messages({
+  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other', 'equb_membership', 'iddir_membership').messages({
     'any.only': 'Invalid category'
   }),
 
@@ -54,7 +56,7 @@ export const updateReportValidation = Joi.object({
     'any.only': 'Invalid priority'
   }),
 
-  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed').messages({
+  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed', 'approved', 'rejected').messages({
     'any.only': 'Invalid status'
   }),
 
@@ -87,7 +89,7 @@ export const assignReportValidation = Joi.object({
 });
 // Validation schema for updating status (Admin only)
 export const updateReportStatusValidation = Joi.object({
-  status: Joi.string().trim().required().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed').messages({
+  status: Joi.string().trim().required().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed', 'approved', 'rejected').messages({
     'any.required': 'Status is required',
     'string.empty': 'Status cannot be empty',
     'any.only': 'Invalid status'
@@ -100,11 +102,11 @@ export const updateReportStatusValidation = Joi.object({
 
 // Validation schema for query parameters
 export const getReportsQueryValidation = Joi.object({
-  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed', 'ALL', 'all').allow('').messages({
+  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed', 'approved', 'rejected', 'ALL', 'all').allow('').messages({
     'any.only': 'Invalid status'
   }),
 
-  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other', 'ALL', 'all').allow('').messages({
+  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other', 'equb_membership', 'iddir_membership', 'ALL', 'all').allow('').messages({
     'any.only': 'Invalid category'
   }),
 
