@@ -53,14 +53,14 @@ router.post(
 // Admin routes
 router.put(
   "/:id/verify-claim",
-  authorizeRoles("admin", "super_admin"),
+  authorizeRoles("condo_admin", "super_admin"),
   validateParams(idParamValidation),
   lostFoundController.verifyClaim
 );
 
 router.post(
   "/archive",
-  authorizeRoles("admin", "super_admin"),
+  authorizeRoles("condo_admin", "super_admin"),
   validate(archiveOldItemsValidation),
   lostFoundController.archiveOldItems
 );
