@@ -31,6 +31,35 @@ export const initializePaymentValidation = Joi.object({
     .allow(null, "")
     .optional(),
 
+  userId: Joi.string()
+    .uuid()
+    .allow(null, "")
+    .optional(),
+
+  referenceNo: Joi.string()
+    .trim()
+    .max(100)
+    .allow("", null)
+    .optional(),
+
+  senderBankName: Joi.string()
+    .trim()
+    .max(100)
+    .allow("", null)
+    .optional(),
+
+  senderAccountNumber: Joi.string()
+    .trim()
+    .max(100)
+    .allow("", null)
+    .optional(),
+
+  recipientAccountNumber: Joi.string()
+    .trim()
+    .max(100)
+    .allow("", null)
+    .optional(),
+
   useHxAccount: Joi.boolean()
     .optional(),
 
