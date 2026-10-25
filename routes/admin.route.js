@@ -11,6 +11,18 @@ import {
   getAdminPayments,
   getAdminTransactions,
   getAdminServiceFees,
+  getAdminEqubById,
+  createAdminEqub,
+  updateAdminEqub,
+  deleteAdminEqub,
+  drawAdminEqubWinner,
+  adminRecordEqubContribution,
+  getAdminIddirById,
+  createAdminIddir,
+  updateAdminIddir,
+  deleteAdminIddir,
+  adminRecordIddirContribution,
+  adminDisburseIddirFund,
 } from "../controllers/admin.controller.js";
 
 import {
@@ -173,6 +185,36 @@ router.get(
   getAdminEqubs
 );
 
+router.get(
+  "/equbs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminEqubById
+);
+
+router.post(
+  "/equbs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  createAdminEqub
+);
+
+router.patch(
+  "/equbs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  updateAdminEqub
+);
+
+router.delete(
+  "/equbs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  deleteAdminEqub
+);
+
+router.post(
+  "/equbs/:equbId/draw",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  drawAdminEqubWinner
+);
+
 router.post(
   "/equbs/members",
   authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
@@ -185,12 +227,42 @@ router.delete(
   adminRemoveUserFromEqub
 );
 
+router.post(
+  "/equbs/:equbId/members/:userId/pay",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminRecordEqubContribution
+);
+
 // Iddirs
 
 router.get(
   "/iddirs",
   authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   getAdminIddirs
+);
+
+router.get(
+  "/iddirs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminIddirById
+);
+
+router.post(
+  "/iddirs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  createAdminIddir
+);
+
+router.patch(
+  "/iddirs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  updateAdminIddir
+);
+
+router.delete(
+  "/iddirs/:id",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  deleteAdminIddir
 );
 
 router.post(
@@ -203,6 +275,18 @@ router.delete(
   "/iddirs/:iddirId/members/:userId",
   authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
   adminRemoveUserFromIddir
+);
+
+router.post(
+  "/iddirs/:iddirId/members/:userId/pay",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminRecordIddirContribution
+);
+
+router.post(
+  "/iddirs/:iddirId/disburse",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  adminDisburseIddirFund
 );
 
 // Payments
