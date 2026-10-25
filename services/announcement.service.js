@@ -84,6 +84,10 @@ export const getAllAnnouncementsService = async (userId, filters = {}) => {
               condoName: true,
               condoCode: true
             }
+          },
+          reads: {
+            where: { userId: userId },
+            select: { id: true, readAt: true }
           }
         },
         orderBy: [
@@ -96,8 +100,14 @@ export const getAllAnnouncementsService = async (userId, filters = {}) => {
       prisma.announcement.count({ where })
     ]);
 
+    const mappedItems = items.map(item => ({
+      ...item,
+      isRead: item.reads && item.reads.length > 0,
+      readAt: item.reads && item.reads.length > 0 ? item.reads[0].readAt : null
+    }));
+
     return {
-      items,
+      items: mappedItems,
       pagination: {
         total,
         page: parseInt(page),
@@ -107,7 +117,7 @@ export const getAllAnnouncementsService = async (userId, filters = {}) => {
     };
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError("Failed to fetch announcements", 500);
+    throw new AppError("Failed to fetch announcements: " + error.message, 500);
   }
 };
 
@@ -532,5 +542,147 @@ export const getAllCondosService = async (userId) => {
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("Failed to fetch condos", 500);
+  }
+};
+
+/**
+ * Get count of unread announcements for the user
+ */
+export const getUnreadAnnouncementsCountService = async (userId) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { condoId: true, role: true }
+    });
+
+    if (!user) throw new AppError("User not found", 404);
+
+    let whereCond = {
+      deletedAt: null,
+      OR: [
+        { expiryDate: null },
+        { expiryDate: { gt: new Date() } }
+      ]
+    };
+
+    if (user.role !== 'super_admin' && user.condoId) {
+      whereCond.condoId = user.condoId;
+    }
+
+    const unreadCount = await prisma.announcement.count({
+      where: {
+        ...whereCond,
+        reads: {
+          none: {
+            userId
+          }
+        }
+      }
+    });
+
+    return { unreadCount };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("Failed to fetch unread announcements count: " + error.message, 500);
+  }
+};
+
+/**
+ * Mark a single announcement as read for the user
+ */
+export const markAnnouncementAsReadService = async (userId, announcementId) => {
+  try {
+    const announcement = await prisma.announcement.findFirst({
+      where: { id: announcementId, deletedAt: null }
+    });
+
+    if (!announcement) {
+      throw new AppError("Announcement not found", 404);
+    }
+
+    await prisma.announcementRead.upsert({
+      where: {
+        uq_announcement_user_read: {
+          announcementId,
+          userId
+        }
+      },
+      create: {
+        announcementId,
+        userId
+      },
+      update: {
+        readAt: new Date()
+      }
+    });
+
+    const { unreadCount } = await getUnreadAnnouncementsCountService(userId);
+    return { success: true, isRead: true, unreadCount };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("Failed to mark announcement as read", 500);
+  }
+};
+
+/**
+ * Mark all active announcements as read for the user
+ */
+export const markAllAnnouncementsAsReadService = async (userId) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { condoId: true, role: true }
+    });
+
+    if (!user) throw new AppError("User not found", 404);
+
+    let whereCond = {
+      deletedAt: null,
+      OR: [
+        { expiryDate: null },
+        { expiryDate: { gt: new Date() } }
+      ]
+    };
+
+    if (user.role !== 'super_admin' && user.condoId) {
+      whereCond.condoId = user.condoId;
+    }
+
+    const unreadAnnouncements = await prisma.announcement.findMany({
+      where: {
+        ...whereCond,
+        reads: {
+          none: {
+            userId
+          }
+        }
+      },
+      select: { id: true }
+    });
+
+    if (unreadAnnouncements.length > 0) {
+      await prisma.$transaction(
+        unreadAnnouncements.map(ann =>
+          prisma.announcementRead.upsert({
+            where: {
+              uq_announcement_user_read: {
+                announcementId: ann.id,
+                userId
+              }
+            },
+            create: {
+              announcementId: ann.id,
+              userId
+            },
+            update: {}
+          })
+        )
+      );
+    }
+
+    return { success: true, unreadCount: 0 };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("Failed to mark all announcements as read", 500);
   }
 };
