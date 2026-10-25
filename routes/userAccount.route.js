@@ -7,6 +7,7 @@ import {
   deleteMyAccount,
   setDefaultMyAccount,
   getMyAccounts,
+  getRecipientAccounts,
 } from "../controllers/userAccount.controller.js";
 
 import { authenticate } from "../middleware/auth.middleware.js";
@@ -14,6 +15,7 @@ const router = express.Router()
 router.use(authenticate);
 
 // ── USER  (CBE, Telebirr, etc.) ───────────────────────────────────────
+router.get("/recipient/:userId", getRecipientAccounts);
 router.get("/", getMyAccounts);
 router.post("/", createMyAccount);
 router.get("/:id", getMyAccountById);
