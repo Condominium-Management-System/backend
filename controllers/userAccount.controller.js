@@ -5,6 +5,7 @@ import {
   updateUserAccountService,
   deleteUserAccountService,
   setDefaultUserAccountService,
+  getRecipientAccountsService,
 } from "../services/userAccount.service.js";
 
 export const getMyAccounts = async (req, res, next) => {
@@ -89,6 +90,23 @@ export const setDefaultMyAccount = async (req, res, next) => {
       success: true,
       message: "Default account updated successfully",
       data: account,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getRecipientAccounts = async (req, res, next) => {
+  try {
+    if (!['condo_admin', 'super_admin'].includes(req.user.role)) {
+      throw new AppError("Only administrators can query recipient payout accounts", 403);
+    }
+
+    const accounts = await getRecipientAccountsService(req.user, req.params.userId);
+
+    res.status(200).json({
+      success: true,
+      data: accounts,
     });
   } catch (error) {
     next(error);
