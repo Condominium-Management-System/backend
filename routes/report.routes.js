@@ -20,6 +20,18 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// List reports based on role
+router.get(
+  "/",
+  validateQuery(getReportsQueryValidation),
+  (req, res, next) => {
+    if (req.user.role === 'resident' || req.user.role === 'guard') {
+      return reportController.getMyReports(req, res, next);
+    }
+    return reportController.getAllReportsForAdmin(req, res, next);
+  }
+);
+
 // RESIDENT ROUTES (All authenticated users)
 
 router.get(
