@@ -14,6 +14,29 @@ import {
 } from "../inputValidation/promotion.validation.js";
 
 const router = express.Router();
+
+// Middleware to handle both multipart/form-data and application/json gracefully
+const uploadFields = upload.fields([
+  { name: 'banner', maxCount: 1 },
+  { name: 'image', maxCount: 1 },
+  { name: 'photo', maxCount: 1 }
+]);
+
+const handlePromotionUpload = (req, res, next) => {
+  if (!req.is('multipart/form-data')) {
+    return next();
+  }
+  uploadFields(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_UNEXPECTED_FILE' || err.message?.includes('Unexpected field')) {
+        return next();
+      }
+      return next(err);
+    }
+    next();
+  });
+};
+
 router.get(
   "/",
   validateQuery(getPromotionsQueryValidation),
@@ -37,10 +60,7 @@ router.post(
   "/",
   authenticate,
   authorizeRoles("condo_admin", "super_admin"),
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'additionalImages', maxCount: 5 }
-  ]),
+  handlePromotionUpload,
   validate(createPromotionValidation),
   promotionController.createPromotion
 );
@@ -58,10 +78,7 @@ router.put(
   "/:id",
   authenticate,
   authorizeRoles("condo_admin", "super_admin"),
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'additionalImages', maxCount: 5 }
-  ]),
+  handlePromotionUpload,
   validateParams(idParamValidation),
   validate(updatePromotionValidation),
   promotionController.updatePromotion
