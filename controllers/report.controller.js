@@ -20,11 +20,11 @@ export const getMyReports = asyncHandler(async (req, res) => {
 
 // Get all reports for admin (Admin sees all)
 export const getAllReportsForAdmin = asyncHandler(async (req, res) => {
-  const { status, category, priority, search, page, limit } = req.query;
+  const { status, category, priority, search, condoId, page, limit } = req.query;
 
   const result = await reportService.getAllReportsForAdminService(
     req.user.id,
-    { status, category, priority, search, page, limit }
+    { status, category, priority, search, condoId, page, limit }
   );
 
   res.status(200).json({
