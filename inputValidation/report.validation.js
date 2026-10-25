@@ -100,19 +100,21 @@ export const updateReportStatusValidation = Joi.object({
 
 // Validation schema for query parameters
 export const getReportsQueryValidation = Joi.object({
-  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed').messages({
+  status: Joi.string().trim().optional().valid('reported', 'assigned', 'in_progress', 'resolved', 'closed', 'ALL', 'all').allow('').messages({
     'any.only': 'Invalid status'
   }),
 
-  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other').messages({
+  category: Joi.string().trim().optional().valid('plumbing', 'electrical', 'structural', 'security', 'noise', 'other', 'ALL', 'all').allow('').messages({
     'any.only': 'Invalid category'
   }),
 
-  priority: Joi.string().trim().optional().valid('low', 'medium', 'high', 'emergency').messages({
+  priority: Joi.string().trim().optional().valid('low', 'medium', 'high', 'emergency', 'ALL', 'all').allow('').messages({
     'any.only': 'Invalid priority'
   }),
 
-  search: Joi.string().trim().optional().max(100).messages({
+  condoId: Joi.string().trim().optional().allow('', 'ALL', 'all'),
+
+  search: Joi.string().trim().optional().allow('').max(100).messages({
     'string.max': 'Search term cannot exceed 100 characters'
   }),
 
@@ -122,13 +124,13 @@ export const getReportsQueryValidation = Joi.object({
     'number.min': 'Page must be at least 1'
   }),
 
-  limit: Joi.number().integer().optional().min(1).max(100).default(20).messages({
+  limit: Joi.number().integer().optional().min(1).max(2000).default(20).messages({
     'number.base': 'Limit must be a number',
     'number.integer': 'Limit must be an integer',
     'number.min': 'Limit must be at least 1',
-    'number.max': 'Limit cannot exceed 100'
+    'number.max': 'Limit cannot exceed 2000'
   })
-});
+}).unknown(true);
 
 // Validation schema for ID parameter
 export const idParamValidation = Joi.object({
