@@ -321,12 +321,7 @@ export const addIddirMemberService = async (
       },
     });
 
-  if (activeMembership) {
-    throw new AppError(
-      "User is already an active member of another Iddir",
-      409
-    );
-  }
+  // Multiple Iddir memberships allowed by policy
 
   const member =
     await prisma.$transaction(
