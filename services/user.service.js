@@ -1094,6 +1094,7 @@ export const getMyFullProfileService = async (userId) => {
   });
 
   return {
+    condo: user.condo,
     user: {
       id: user.id,
       fullName: user.fullName,
