@@ -16,10 +16,13 @@ export const validate = (schema, property = 'body') => {
       
       // If data doesn't exist, check if there's a file
       if (!dataToValidate || Object.keys(dataToValidate).length === 0) {
-        if (req.file || req.files) {
+        if (property === 'query') {
+          dataToValidate = dataToValidate || {};
+        } else if (req.file || req.files) {
           return next();
+        } else {
+          return next(new AppError(`No data found in request ${property}`, 400));
         }
-        return next(new AppError(`No data found in request ${property}`, 400));
       }
 
       // Validate the data using Joi
@@ -37,7 +40,8 @@ export const validate = (schema, property = 'body') => {
           value: err.context?.value || null
         }));
 
-        return next(new AppError('Validation failed', 400, errors));
+        const errorMsg = errors.map(e => e.message).join(', ');
+        return next(new AppError(errorMsg ? `Validation failed: ${errorMsg}` : 'Validation failed', 400, errors));
       }
 
       // Replace request data with validated data
