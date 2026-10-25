@@ -167,7 +167,7 @@ export const createEqubService = async (
 
       noMembers: 0,
 
-      status: "pending",
+      status: value.status || "pending",
 
     },
 
