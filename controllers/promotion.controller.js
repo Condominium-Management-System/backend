@@ -4,7 +4,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 
 // Get all promotions (Public)
 export const getAllPromotions = asyncHandler(async (req, res) => {
-  const { type, category, status, search, page, limit } = req.query;
+  const { type, category, status, search, page, limit, condoId } = req.query;
 
   const result = await promotionService.getAllPromotionsService({
     type,
@@ -12,7 +12,8 @@ export const getAllPromotions = asyncHandler(async (req, res) => {
     status: status || 'active',
     search,
     page,
-    limit
+    limit,
+    condoId
   });
 
   res.status(200).json({
@@ -45,7 +46,9 @@ export const createPromotion = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: "Promotion created successfully. Waiting for admin review.",
+    message: Array.isArray(result)
+      ? `Promotions created for ${result.length} condominiums, awaiting review.`
+      : "Promotion created successfully. Waiting for admin review.",
     data: result
   });
 });

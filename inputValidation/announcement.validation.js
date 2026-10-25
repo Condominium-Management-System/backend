@@ -36,13 +36,11 @@ export const createAnnouncementValidation = Joi.object({
       'any.only': 'Invalid announcement type'
     }),
 
-  condoId: Joi.string()
-    .trim()
-    .optional()
-    .uuid()
-    .messages({
-      'string.guid': 'Invalid condo ID format'
-    }),
+  condoId: Joi.string().trim().optional().allow(null, '', 'ALL'),
+  condoIds: Joi.alternatives().try(
+    Joi.array().items(Joi.string().trim()),
+    Joi.string().trim()
+  ).optional().allow(null),
 
   expiryDate: Joi.date()
     .iso()
@@ -70,7 +68,7 @@ export const createAnnouncementValidation = Joi.object({
   isPublic: Joi.boolean()
     .optional()
     .default(true)
-});
+}).unknown(true);
 
 // Validation schema for updating an announcement
 export const updateAnnouncementValidation = Joi.object({
@@ -133,6 +131,7 @@ export const updateAnnouncementValidation = Joi.object({
 
 // Validation schema for query parameters
 export const getAnnouncementsQueryValidation = Joi.object({
+  condoId: Joi.string().trim().optional().allow('ALL', ''),
   announcementType: Joi.string()
     .trim()
     .optional()

@@ -230,7 +230,7 @@ export const createIddirService = async (
       startedDate: value.startedDate,
       contributionAmount:
         value.contributionAmount,
-      status: "active",
+      status: value.status || "active",
       noMembers: 0,
     },
     select: adminIddirSelect,

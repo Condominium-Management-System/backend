@@ -15,9 +15,8 @@ export const createLostFoundValidation = Joi.object({
       'any.only': 'Type must be either "lost" or "found"'
     }),
 
-  itemName: Joi.string()
-    .trim()
-    .required()
+  itemName: Joi.string().trim().optional(),
+  title: Joi.string().trim().optional()
     .min(2)
     .max(100)
     .messages({
@@ -58,33 +57,13 @@ export const createLostFoundValidation = Joi.object({
       'string.max': 'Location cannot exceed 200 characters'
     }),
 
-  dateLostFound: Joi.alternatives()
-    .try(
-      Joi.string()
-        .pattern(/^\d{4}-\d{2}-\d{2}$/)
-        .custom((value, helpers) => {
-          const date = new Date(value);
-          if (isNaN(date.getTime())) {
-            return helpers.error('date.invalid');
-          }
-          return value;
-        })
-        .messages({
-          'string.pattern.base': 'Date must be in format YYYY-MM-DD',
-          'date.invalid': 'Invalid date'
-        }),
-      Joi.date()
-        .iso()
-        .messages({
-          'date.base': 'Invalid date format',
-          'date.iso': 'Date must be in ISO format'
-        })
-    )
-    .required()
+  dateLostFound: Joi.alternatives().try(Joi.date(), Joi.string()).optional(),
+  date: Joi.alternatives().try(Joi.date(), Joi.string()).optional(),
+  condoId: Joi.string().trim().optional().allow(null, '', 'ALL')
     .messages({
       'any.required': 'Date is required'
     })
-});
+}).unknown(true);
 
 /**
  * Validation schema for updating a lost/found item
@@ -234,7 +213,7 @@ export const getLostFoundQueryValidation = Joi.object({
       'number.min': 'Limit must be at least 1',
       'number.max': 'Limit cannot exceed 100'
     })
-});
+}).unknown(true);
 
 /**
  * Validation schema for ID parameter

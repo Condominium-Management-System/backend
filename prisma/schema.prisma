@@ -39,6 +39,8 @@ enum EqubMemberStatus {
   inactive
   suspended
   winner
+  pending
+  rejected
 }
 
 enum EqubPayoutStatus {
@@ -58,6 +60,16 @@ enum IddirMemberStatus {
   active
   inactive
   suspended
+  pending
+  rejected
+}
+
+enum IddirClaimStatus {
+  submitted
+  under_review
+  approved
+  rejected
+  disbursed
 }
 
 enum ActiveInactiveStatus {
@@ -238,6 +250,8 @@ model User {
   bankAccounts         UserAccount[]
   equbMemberships      EqubMember[]
   iddirMemberships     IddirMember[]
+  iddirClaims          IddirClaim[]     @relation("UserClaims")
+  reviewedClaims       IddirClaim[]     @relation("ClaimReviewer")
   equbPayouts          EqubPayout[]
   paymentsMade         Payment[]        @relation("PaymentUser")
   paymentsApproved     Payment[]        @relation("PaymentApprover")
@@ -433,6 +447,7 @@ model Iddir {
   startedDate        DateTime
   contributionAmount Decimal       @db.Decimal(15, 2)
   members            IddirMember[]
+  claims             IddirClaim[]
   payments           Payment[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
@@ -626,6 +641,7 @@ model Transaction {
 
   payment    Payment?
   equbPayout EqubPayout?
+  iddirClaim IddirClaim?
   serviceFee ServiceFee?
 
   createdAt DateTime  @default(now())
@@ -790,6 +806,8 @@ model LostFound {
 
   verifiedBy User? @relation("LostFoundVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
 
+  chatMessages ChatMessage[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -811,6 +829,8 @@ model ChatMessage {
   sender     User      @relation("ChatSender", fields: [senderId], references: [id], onDelete: Restrict)
   receiverId String
   receiver   User      @relation("ChatReceiver", fields: [receiverId], references: [id], onDelete: Restrict)
+  lostFoundId String?
+  lostFound   LostFound? @relation(fields: [lostFoundId], references: [id], onDelete: SetNull)
   type       ChatType
   content    String    @db.Text
   isRead     Boolean   @default(false)
@@ -822,6 +842,7 @@ model ChatMessage {
   @@index([condoId])
   @@index([senderId])
   @@index([receiverId])
+  @@index([lostFoundId])
   @@index([isRead])
   @@index([deletedAt])
   @@map("chat_messages")
@@ -900,4 +921,32 @@ model ReportResponse {
   @@index([reportId])
   @@index([userId])
   @@map("report_responses")
+}
+
+model IddirClaim {
+  id              String           @id @default(uuid())
+  iddirId         String
+  iddir           Iddir            @relation(fields: [iddirId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User             @relation("UserClaims", fields: [userId], references: [id], onDelete: Cascade)
+  claimType       String
+  reason          String
+  description     String?          @db.Text
+  amountRequested Decimal          @db.Decimal(15, 2)
+  amountApproved  Decimal?         @db.Decimal(15, 2)
+  status          IddirClaimStatus @default(submitted)
+  documentUrl     String?
+  adminNotes      String?          @db.Text
+  reviewedById    String?
+  reviewedBy      User?            @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  decidedAt       DateTime?
+  transactionId   String?          @unique
+  transaction     Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([iddirId])
+  @@index([userId])
+  @@index([status])
+  @@map("iddir_claims")
 }

@@ -5,6 +5,7 @@ import {
   searchUsers,
   getUserById,
   getUserProfile,
+  getMyFullProfile,
   verifyUser,
   updateUserRole,
   updateUserByAdmin,
@@ -25,6 +26,9 @@ import {
 const router = express.Router();
 
 router.use(authenticate);
+
+// Get my full profile for resident portal
+router.get("/me/full-profile", getMyFullProfile);
 
 // Get user profile
 router.get(

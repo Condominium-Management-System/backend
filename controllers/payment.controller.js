@@ -12,7 +12,12 @@ import {
 // INITIALIZE / CREATE PAYMENT
 export const initializePayment = async (req, res, next) => {
   try {
-    const result = await createPaymentService(req.user.id, req.body);
+    const targetUserId =
+      req.user.role === "resident"
+        ? req.user.id
+        : req.body.userId || req.user.id;
+
+    const result = await createPaymentService(targetUserId, req.body, req.user);
 
     res.status(201).json({
       success: true,

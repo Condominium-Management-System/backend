@@ -772,16 +772,12 @@ export const getAllBlocksService = async ({
   }
 
 
-  return prisma.block.findMany({
-
+  const blocks = await prisma.block.findMany({
     where,
-
     orderBy: {
       createdAt: "desc"
     },
-
     include: {
-
       condo: {
         select: {
           id: true,
@@ -791,7 +787,20 @@ export const getAllBlocksService = async ({
           city: true
         }
       },
-
+      rooms: {
+        where: {
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          roomNo: true,
+          floorNo: true,
+          status: true,
+          occupiedById: true,
+          price: true,
+          model: true
+        }
+      },
       _count: {
         select: {
           rooms: {
@@ -801,9 +810,33 @@ export const getAllBlocksService = async ({
           }
         }
       }
-
     }
+  });
 
+  return blocks.map((block) => {
+    const totalRooms = block.rooms.length;
+    const freeRooms = block.rooms.filter((r) => r.status === "free").length;
+    const occupiedRooms = block.rooms.filter((r) => r.status === "occupied").length;
+    const reservedRooms = block.rooms.filter((r) => r.status === "reserved").length;
+    const occupancyRate = totalRooms === 0 ? 0 : Number(((occupiedRooms / totalRooms) * 100).toFixed(2));
+    const availabilityStatus = totalRooms === 0 ? "Empty" : (occupiedRooms === totalRooms ? "Full" : (occupiedRooms === 0 ? "Vacant" : "Partial"));
+
+    return {
+      ...block,
+      configuredRooms: block.noRooms,
+      totalRooms,
+      availableRooms: freeRooms,
+      occupiedRooms,
+      occupancyRate,
+      availabilityStatus,
+      rooms: {
+        total: totalRooms,
+        free: freeRooms,
+        occupied: occupiedRooms,
+        reserved: reservedRooms,
+        list: block.rooms
+      }
+    };
   });
 };
 
@@ -837,7 +870,20 @@ export const getBlockByIdService = async (
           city: true
         }
       },
-
+      rooms: {
+        where: {
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          roomNo: true,
+          floorNo: true,
+          status: true,
+          occupiedById: true,
+          price: true,
+          model: true
+        }
+      },
       _count: {
         select: {
           rooms: {
@@ -857,7 +903,29 @@ export const getBlockByIdService = async (
     );
   }
 
-  return block;
+  const totalRooms = block.rooms.length;
+  const freeRooms = block.rooms.filter((r) => r.status === "free").length;
+  const occupiedRooms = block.rooms.filter((r) => r.status === "occupied").length;
+  const reservedRooms = block.rooms.filter((r) => r.status === "reserved").length;
+  const occupancyRate = totalRooms === 0 ? 0 : Number(((occupiedRooms / totalRooms) * 100).toFixed(2));
+  const availabilityStatus = totalRooms === 0 ? "Empty" : (occupiedRooms === totalRooms ? "Full" : (occupiedRooms === 0 ? "Vacant" : "Partial"));
+
+  return {
+    ...block,
+    configuredRooms: block.noRooms,
+    totalRooms,
+    availableRooms: freeRooms,
+    occupiedRooms,
+    occupancyRate,
+    availabilityStatus,
+    rooms: {
+      total: totalRooms,
+      free: freeRooms,
+      occupied: occupiedRooms,
+      reserved: reservedRooms,
+      list: block.rooms
+    }
+  };
 };
 
 

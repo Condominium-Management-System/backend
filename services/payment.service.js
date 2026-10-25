@@ -9,7 +9,7 @@ import { generatePaymentReference } from "../utils/paymentReference.js";
 import { calculateServiceFee } from "../utils/calculateServiceFee.js";
 
 // CREATE / INITIALIZE PAYMENT
-export const createPaymentService = async (userId, payload) => {
+export const createPaymentService = async (userId, payload, requester = null) => {
   const { error, value } = initializePaymentValidation.validate(payload, {
     abortEarly: false,
     stripUnknown: true,
@@ -169,7 +169,7 @@ export const createPaymentService = async (userId, payload) => {
     : "0.34";
 
   const amounts = calculateServiceFee(amount, feePercentage);
-  const referenceNo = generatePaymentReference();
+  const referenceNo = value.referenceNo && value.referenceNo.trim() ? value.referenceNo.trim() : generatePaymentReference();
 
   // Check duplicate pending payment
   const existingPending = await prisma.payment.findFirst({

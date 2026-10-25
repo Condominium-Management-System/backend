@@ -1011,9 +1011,9 @@ export const adminRemoveUserFromEqubService =
     }
 
 
-    // ── 3. Find membership ────────────────────────────────────────────────
+    // ── 3. Find membership (by equbId_userId OR fallback by equbMember.id) ─
 
-    const member = await prisma.equbMember.findUnique({
+    let member = await prisma.equbMember.findUnique({
       where: {
         equbId_userId: {
           equbId: equb.id,
@@ -1033,6 +1033,25 @@ export const adminRemoveUserFromEqubService =
       },
     });
 
+    if (!member) {
+      member = await prisma.equbMember.findFirst({
+        where: {
+          id: String(userId),
+          equbId: equb.id,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phoneNumber: true,
+              fan: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!member) {
       throw new AppError(
@@ -1041,12 +1060,27 @@ export const adminRemoveUserFromEqubService =
       );
     }
 
-
     if (member.status === "inactive") {
-      throw new AppError(
-        "User is already removed from this Equb",
-        400
-      );
+      const activeCount = await prisma.equbMember.count({
+        where: {
+          equbId: equb.id,
+          status: "active",
+        },
+      });
+      return {
+        removed: true,
+        alreadyInactive: true,
+        message: `User ${member.user?.fullName || ''} is already inactive/removed from this Equb`,
+        member,
+        activeMembers: activeCount,
+        removedBy: {
+          id: admin.id,
+          fullName: admin.fullName,
+          email: admin.email,
+          role: admin.role,
+          condoId: admin.condoId,
+        },
+      };
     }
 
 
@@ -1445,9 +1479,9 @@ export const adminRemoveUserFromIddirService =
     }
 
 
-    // ── 3. Find membership ────────────────────────────────────────────────
+    // ── 3. Find membership (by iddirId_userId OR fallback by iddirMember.id) ─
 
-    const member = await prisma.iddirMember.findUnique({
+    let member = await prisma.iddirMember.findUnique({
       where: {
         iddirId_userId: {
           iddirId: iddir.id,
@@ -1467,6 +1501,25 @@ export const adminRemoveUserFromIddirService =
       },
     });
 
+    if (!member) {
+      member = await prisma.iddirMember.findFirst({
+        where: {
+          id: String(userId),
+          iddirId: iddir.id,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phoneNumber: true,
+              fan: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!member) {
       throw new AppError(
@@ -1475,12 +1528,27 @@ export const adminRemoveUserFromIddirService =
       );
     }
 
-
     if (member.status === "inactive") {
-      throw new AppError(
-        "User is already removed from this Iddir",
-        400
-      );
+      const activeCount = await prisma.iddirMember.count({
+        where: {
+          iddirId: iddir.id,
+          status: "active",
+        },
+      });
+      return {
+        removed: true,
+        alreadyInactive: true,
+        message: `User ${member.user?.fullName || ''} is already inactive/removed from this Iddir`,
+        member,
+        activeMembers: activeCount,
+        removedBy: {
+          id: admin.id,
+          fullName: admin.fullName,
+          email: admin.email,
+          role: admin.role,
+          condoId: admin.condoId,
+        },
+      };
     }
 
 
@@ -1658,6 +1726,14 @@ export const getAdminEqubsService = async (currentUser, query = {}) => {
           },
           orderBy: { roundNumber: "asc" },
         },
+        payments: {
+          where: { status: "approved" },
+          select: { id: true, amount: true, userId: true },
+        },
+        payouts: {
+          where: { status: "paid" },
+          select: { id: true, amount: true, roundNumber: true },
+        },
         _count: {
           select: {
             members: true,
@@ -1673,8 +1749,28 @@ export const getAdminEqubsService = async (currentUser, query = {}) => {
     prisma.equb.count({ where }),
   ]);
 
+  const formattedEqubs = equbs.map((equb) => {
+    const activeMembers = (equb.members || []).filter((m) => m.status === "active");
+    const activeMembersCount = activeMembers.length;
+    const expectedContribution = activeMembersCount * Number(equb.contributionAmount);
+    const approvedPaymentsSum = (equb.payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+    const membersPaidSum = (equb.members || []).reduce((sum, m) => sum + Number(m.totalPaid || 0), 0);
+    const totalCollected = approvedPaymentsSum > 0 ? approvedPaymentsSum : membersPaidSum;
+    const totalDisbursed = (equb.payouts || []).reduce((sum, po) => sum + Number(po.amount), 0);
+    const availableBalance = Math.max(0, totalCollected - totalDisbursed);
+
+    return {
+      ...equb,
+      activeMembersCount,
+      expectedContribution,
+      totalCollected,
+      totalDisbursed,
+      availableBalance,
+    };
+  });
+
   return {
-    equbs,
+    equbs: formattedEqubs,
     pagination: {
       page: pageNumber,
       limit: limitNumber,
@@ -1760,6 +1856,10 @@ export const getAdminIddirsService = async (currentUser, query = {}) => {
             },
           },
         },
+        payments: {
+          where: { status: "approved" },
+          select: { id: true, amount: true, userId: true },
+        },
         _count: {
           select: {
             members: true,
@@ -1774,8 +1874,28 @@ export const getAdminIddirsService = async (currentUser, query = {}) => {
     prisma.iddir.count({ where }),
   ]);
 
+  const formattedIddirs = iddirs.map((iddir) => {
+    const activeMembers = (iddir.members || []).filter((m) => m.status === "active");
+    const activeMembersCount = activeMembers.length;
+    const expectedContribution = activeMembersCount * Number(iddir.contributionAmount);
+    const approvedPaymentsSum = (iddir.payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+    const membersPaidSum = (iddir.members || []).reduce((sum, m) => sum + Number(m.totalPaid || 0), 0);
+    const totalCollected = approvedPaymentsSum > 0 ? approvedPaymentsSum : membersPaidSum;
+    const totalDisbursed = (iddir.members || []).reduce((sum, m) => sum + Number(m.totalReceived || 0), 0);
+    const availableBalance = Math.max(0, totalCollected - totalDisbursed);
+
+    return {
+      ...iddir,
+      activeMembersCount,
+      expectedContribution,
+      totalCollected,
+      totalDisbursed,
+      availableBalance,
+    };
+  });
+
   return {
-    iddirs,
+    iddirs: formattedIddirs,
     pagination: {
       page: pageNumber,
       limit: limitNumber,
@@ -2498,7 +2618,7 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
     where: { id: equbId, deletedAt: null },
     include: {
       members: {
-        where: { status: "active", hasWon: false },
+        where: { status: "active", hasReceivedPayout: false }, // only members who haven't won yet
         include: { user: true },
       },
       payouts: true,
@@ -2514,17 +2634,17 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
   }
 
   if (equb.members.length === 0) {
-    throw new AppError("No eligible members remaining to win in this Equb", 400);
+    throw new AppError("All active members have already won in this Equb rotation cycle!", 400);
   }
 
   let selectedWinner;
   if (payload.winnerUserId) {
     selectedWinner = equb.members.find((m) => m.userId === payload.winnerUserId);
     if (!selectedWinner) {
-      throw new AppError("Selected user is not an eligible member for this round", 400);
+      throw new AppError("Selected user is not an eligible member for this round (they may have already received their payout)", 400);
     }
   } else {
-    // Random draw among eligible members
+    // Random lottery draw among remaining eligible members
     const randomIndex = Math.floor(Math.random() * equb.members.length);
     selectedWinner = equb.members[randomIndex];
   }
@@ -2533,7 +2653,7 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
   const activeMembersCount = await prisma.equbMember.count({
     where: { equbId, status: "active" },
   });
-  const payoutAmount = activeMembersCount * equb.contributionAmount;
+  const payoutAmount = activeMembersCount * Number(equb.contributionAmount);
   const selectionReference = `EQB-WIN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
   const result = await prisma.$transaction(async (tx) => {
@@ -2547,7 +2667,7 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
         selectionReference,
         selectedAt: new Date(),
         paidAt: new Date(),
-        status: "completed",
+        status: "paid",
       },
       include: {
         winner: {
@@ -2556,14 +2676,26 @@ export const drawAdminEqubWinnerService = async (currentUser, equbId, payload = 
       },
     });
 
+    // Mark winner so they wait until all other members get their turn
     await tx.equbMember.update({
       where: { id: selectedWinner.id },
       data: {
-        hasWon: true,
-        winRound: currentRound,
-        winDate: new Date(),
+        hasReceivedPayout: true,
+        payoutCount: { increment: 1 },
       },
     });
+
+    // Check if any eligible members remain who haven't won
+    const remainingEligible = await tx.equbMember.count({
+      where: { equbId, status: "active", hasReceivedPayout: false },
+    });
+
+    if (remainingEligible === 0) {
+      await tx.equb.update({
+        where: { id: equbId },
+        data: { status: "completed" },
+      });
+    }
 
     return payout;
   });
@@ -2578,7 +2710,7 @@ export const getAdminIddirByIdService = async (currentUser, iddirId) => {
     include: {
       condo: true,
       createdBy: {
-        select: { id: true, fullName: true, email: true, phoneNumber: true },
+        select: { id: true, fullName: true, email: true, phoneNumber: true, role: true },
       },
       members: {
         include: {
@@ -2589,16 +2721,24 @@ export const getAdminIddirByIdService = async (currentUser, iddirId) => {
               email: true,
               phoneNumber: true,
               fan: true,
+              block: true,
+              roomNo: true,
             },
           },
         },
         orderBy: { joinedAt: "asc" },
       },
       payments: {
-        take: 20,
+        take: 100,
         orderBy: { createdAt: "desc" },
         include: {
           user: {
+            select: { id: true, fullName: true, email: true, phoneNumber: true, block: true, roomNo: true },
+          },
+          transaction: {
+            select: { id: true, referenceNo: true, paymentMethod: true, status: true },
+          },
+          approvedBy: {
             select: { id: true, fullName: true, email: true },
           },
         },
@@ -2617,7 +2757,592 @@ export const getAdminIddirByIdService = async (currentUser, iddirId) => {
     throw new AppError("You do not have permission to view this Iddir", 403);
   }
 
+  const activeMembers = iddir.members.filter((m) => m.status === "active");
+  const activeMembersCount = activeMembers.length;
+  const expectedContribution = activeMembersCount * Number(iddir.contributionAmount);
+
+  // Authoritative approved payments
+  const approvedPayments = (iddir.payments || []).filter((p) => p.status === "approved");
+  const totalCollectedFromPayments = approvedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPaidSumFromMembers = iddir.members.reduce((sum, m) => sum + Number(m.totalPaid || 0), 0);
+  const totalCollected = approvedPayments.length > 0 ? totalCollectedFromPayments : totalPaidSumFromMembers;
+
+  const totalDisbursed = iddir.members.reduce((sum, m) => sum + Number(m.totalReceived || 0), 0);
+  const availableBalance = Math.max(0, totalCollected - totalDisbursed);
+
+  return {
+    ...iddir,
+    activeMembersCount,
+    expectedContribution,
+    totalCollected,
+    totalDisbursed,
+    availableBalance,
+  };
+};
+
+
+export const adminRecordEqubContributionService = async (currentUser, equbId, userId, payload = {}) => {
+  const equb = await prisma.equb.findFirst({
+    where: { id: equbId, deletedAt: null },
+  });
+  if (!equb) throw new AppError("Equb not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== equb.condoId) {
+    throw new AppError("You do not have permission to manage this Equb", 403);
+  }
+
+  const member = await prisma.equbMember.findUnique({
+    where: { equbId_userId: { equbId, userId } },
+    include: { user: true },
+  });
+  if (!member) throw new AppError("Member not found in this Equb", 404);
+
+  const amount = Number(payload.amount || equb.contributionAmount);
+  if (isNaN(amount) || amount <= 0) {
+    throw new AppError("Contribution amount must be a positive number", 400);
+  }
+
+  const currentMonthYear = payload.monthYear || new Date().toISOString().slice(0, 7);
+
+  // Check duplicate contribution for this cycle
+  const existingApprovedPayment = await prisma.payment.findFirst({
+    where: {
+      userId,
+      equbId,
+      monthYear: currentMonthYear,
+      status: "approved",
+    },
+  });
+
+  if (existingApprovedPayment && !payload.allowExtra) {
+    throw new AppError(
+      `Member "${member.user.fullName}" has already contributed for cycle ${currentMonthYear} (Ref: ${existingApprovedPayment.id.slice(0, 8)}). Duplicate contribution prevented.`,
+      409
+    );
+  }
+
+  const reference = `EQB-CONT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const txRecord = await tx.transaction.create({
+      data: {
+        senderId: userId,
+        senderName: member.user.fullName,
+        receiverId: currentUser.id,
+        receiverName: `${equb.name} Treasury`,
+        paymentType: "equb",
+        paymentMethod: payload.paymentMethod || "bank_transfer",
+        amount,
+        referenceNo: reference,
+        condoId: equb.condoId,
+        monthYear: currentMonthYear,
+        status: "completed",
+      },
+    });
+
+    const payment = await tx.payment.create({
+      data: {
+        userId,
+        condoId: equb.condoId,
+        equbId,
+        paymentType: "equb",
+        amount,
+        serviceFee: 0,
+        totalAmount: amount,
+        monthYear: currentMonthYear,
+        paymentMethod: payload.paymentMethod || "bank_transfer",
+        status: "approved",
+        transactionId: txRecord.id,
+        approvalDate: new Date(),
+        approvedById: currentUser.id,
+        paymentDate: new Date(),
+        adminNotes: payload.notes || "Admin recorded verified Equb contribution",
+      },
+    });
+
+    const updatedMember = await tx.equbMember.update({
+      where: { id: member.id },
+      data: {
+        totalPaid: { increment: amount },
+      },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phoneNumber: true, block: true, roomNo: true },
+        },
+      },
+    });
+
+    return { updatedMember, payment, reference };
+  });
+
+  return result.updatedMember;
+};
+
+
+export const adminRecordIddirContributionService = async (currentUser, iddirId, userId, payload = {}) => {
+  const iddir = await prisma.iddir.findFirst({
+    where: { id: iddirId, deletedAt: null },
+  });
+  if (!iddir) throw new AppError("Iddir not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== iddir.condoId) {
+    throw new AppError("You do not have permission to manage this Iddir", 403);
+  }
+
+  const member = await prisma.iddirMember.findUnique({
+    where: { iddirId_userId: { iddirId, userId } },
+    include: { user: true },
+  });
+  if (!member) throw new AppError("Member not found in this Iddir", 404);
+
+  const amount = Number(payload.amount || iddir.contributionAmount);
+  if (isNaN(amount) || amount <= 0) {
+    throw new AppError("Contribution amount must be a positive number", 400);
+  }
+
+  const currentMonthYear = payload.monthYear || new Date().toISOString().slice(0, 7);
+
+  // Check duplicate contribution for this cycle
+  const existingApprovedPayment = await prisma.payment.findFirst({
+    where: {
+      userId,
+      iddirId,
+      monthYear: currentMonthYear,
+      status: "approved",
+    },
+  });
+
+  if (existingApprovedPayment && !payload.allowExtra) {
+    throw new AppError(
+      `Member "${member.user.fullName}" has already contributed for cycle ${currentMonthYear} (Ref: ${existingApprovedPayment.id.slice(0, 8)}). Duplicate contribution prevented.`,
+      409
+    );
+  }
+
+  const reference = `IDDIR-CONT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const txRecord = await tx.transaction.create({
+      data: {
+        senderId: userId,
+        senderName: member.user.fullName,
+        receiverId: currentUser.id,
+        receiverName: `${iddir.name} Treasury`,
+        paymentType: "iddir",
+        paymentMethod: payload.paymentMethod || "bank_transfer",
+        amount,
+        referenceNo: reference,
+        condoId: iddir.condoId,
+        monthYear: currentMonthYear,
+        status: "completed",
+      },
+    });
+
+    const payment = await tx.payment.create({
+      data: {
+        userId,
+        condoId: iddir.condoId,
+        iddirId,
+        paymentType: "iddir",
+        amount,
+        serviceFee: 0,
+        totalAmount: amount,
+        monthYear: currentMonthYear,
+        paymentMethod: payload.paymentMethod || "bank_transfer",
+        status: "approved",
+        transactionId: txRecord.id,
+        approvalDate: new Date(),
+        approvedById: currentUser.id,
+        paymentDate: new Date(),
+        adminNotes: payload.notes || "Admin recorded verified Iddir contribution",
+      },
+    });
+
+    const updatedMember = await tx.iddirMember.update({
+      where: { id: member.id },
+      data: {
+        totalPaid: { increment: amount },
+      },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phoneNumber: true, block: true, roomNo: true },
+        },
+      },
+    });
+
+    return { updatedMember, payment, reference };
+  });
+
+  return result.updatedMember;
+};
+
+
+export const adminDisburseIddirFundService = async (currentUser, iddirId, payload = {}) => {
+  const iddir = await prisma.iddir.findFirst({
+    where: { id: iddirId, deletedAt: null },
+    include: {
+      condo: true,
+      members: {
+        where: { status: "active" },
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phoneNumber: true,
+              block: true,
+              roomNo: true,
+              fan: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!iddir) throw new AppError("Iddir not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== iddir.condoId) {
+    throw new AppError("You do not have permission to disburse funds for this Iddir", 403);
+  }
+
+  const { recipientUserId, reason } = payload;
+  if (!recipientUserId) {
+    throw new AppError("Please select a recipient member to receive the collected money", 400);
+  }
+
+  const member = iddir.members.find((m) => m.userId === recipientUserId);
+  if (!member) {
+    throw new AppError("Selected recipient is not an active member of this Iddir", 404);
+  }
+
+  // Calculate total collected vs total disbursed
+  const totalCollected = iddir.members.reduce((sum, m) => sum + Number(m.totalPaid || 0), 0);
+  const totalDisbursed = iddir.members.reduce((sum, m) => sum + Number(m.totalReceived || 0), 0);
+  const availableBalance = Math.max(0, totalCollected - totalDisbursed);
+
+  if (availableBalance <= 0) {
+    throw new AppError("No available funds to disburse in this Iddir. Members must contribute first.", 400);
+  }
+
+  const amountToDisburse = payload.amount !== undefined && payload.amount !== null && payload.amount !== ""
+    ? Number(payload.amount)
+    : availableBalance;
+
+  if (isNaN(amountToDisburse) || amountToDisburse <= 0) {
+    throw new AppError("Disbursement amount must be a positive number", 400);
+  }
+
+  if (amountToDisburse > availableBalance) {
+    throw new AppError(
+      `Disbursement amount (ETB ${amountToDisburse.toLocaleString()}) exceeds available Iddir fund balance (ETB ${availableBalance.toLocaleString()})`,
+      400
+    );
+  }
+
+  // Check recipient registered bank/payment account
+  const recipientAccount = await prisma.userAccount.findFirst({
+    where: {
+      userId: recipientUserId,
+      status: "active",
+    },
+    orderBy: { isDefault: "desc" },
+  });
+
+  if (!recipientAccount) {
+    throw new AppError(
+      `Cannot disburse funds: Recipient "${member.user.fullName}" does not have an active registered bank or mobile money account. The resident must add a payment account (e.g. CBE or Telebirr) to their profile before funds can be disbursed.`,
+      400
+    );
+  }
+
+  const reference = `IDDIR-DISB-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Record disbursement transaction
+    const txRecord = await tx.transaction.create({
+      data: {
+        senderId: currentUser.id,
+        senderName: `${currentUser.fullName} (Admin)`,
+        receiverId: recipientUserId,
+        receiverName: member.user.fullName,
+        receiverAccountId: recipientAccount.id,
+        receiverAccNo: recipientAccount.accountNumber,
+        paymentType: "iddir",
+        paymentMethod: recipientAccount.paymentMethod || "bank_transfer",
+        amount: amountToDisburse,
+        referenceNo: reference,
+        condoId: iddir.condoId,
+        status: "completed",
+      },
+    });
+
+    const updatedMember = await tx.iddirMember.update({
+      where: { id: member.id },
+      data: {
+        totalReceived: { increment: amountToDisburse },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+            block: true,
+            roomNo: true,
+            fan: true,
+          },
+        },
+      },
+    });
+
+    return { updatedMember, txRecord };
+  });
+
+  const remainingBalance = availableBalance - amountToDisburse;
+
+  return {
+    iddirId: iddir.id,
+    iddirName: iddir.name,
+    recipient: result.updatedMember.user,
+    recipientAccount: {
+      bankName: recipientAccount.providerName || recipientAccount.paymentMethod.toUpperCase(),
+      accountNumber: recipientAccount.accountNumber,
+      accountName: recipientAccount.accountName,
+    },
+    amount: amountToDisburse,
+    reason: reason || "Iddir mutual aid disbursement",
+    reference,
+    totalDisbursedToMember: Number(result.updatedMember.totalReceived),
+    availableBalanceRemaining: remainingBalance,
+    disbursedAt: new Date(),
+  };
+};
+
+
+export const createAdminEqubService = async (currentUser, payload) => {
+  const condoId = payload.condoId || currentUser.condoId;
+  if (!condoId) throw new AppError("Condo ID is required", 400);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== condoId) {
+    throw new AppError("You can only create Equbs in your own condominium", 403);
+  }
+
+  const condo = await prisma.condo.findFirst({
+    where: { id: String(condoId), deletedAt: null },
+  });
+  if (!condo) throw new AppError("Condominium not found", 404);
+  if (!condo.activeStatus) throw new AppError("Condominium is inactive", 400);
+
+  const start = new Date(payload.startDate || new Date());
+  const due = new Date(payload.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+  const equb = await prisma.equb.create({
+    data: {
+      condoId,
+      createdById: currentUser.id,
+      name: payload.name?.trim(),
+      contributionAmount: Number(payload.contributionAmount),
+      startDate: start,
+      dueDate: due,
+      noMembers: 0,
+      status: payload.status || "active",
+    },
+    include: {
+      condo: { select: { id: true, condoCode: true, condoName: true } },
+      createdBy: { select: { id: true, fullName: true, email: true } },
+    },
+  });
+
+  return equb;
+};
+
+
+export const updateAdminEqubService = async (currentUser, equbId, payload) => {
+  const equb = await prisma.equb.findFirst({
+    where: { id: equbId, deletedAt: null },
+  });
+  if (!equb) throw new AppError("Equb not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== equb.condoId) {
+    throw new AppError("You do not have permission to update this Equb", 403);
+  }
+
+  const data = {};
+  if (payload.name) data.name = payload.name.trim();
+  if (payload.contributionAmount) data.contributionAmount = Number(payload.contributionAmount);
+  if (payload.startDate) data.startDate = new Date(payload.startDate);
+  if (payload.dueDate) data.dueDate = new Date(payload.dueDate);
+  if (payload.status) data.status = payload.status;
+
+  const updated = await prisma.equb.update({
+    where: { id: equbId },
+    data,
+    include: {
+      condo: { select: { id: true, condoCode: true, condoName: true } },
+      createdBy: { select: { id: true, fullName: true, email: true } },
+    },
+  });
+
+  return updated;
+};
+
+
+export const deleteAdminEqubService = async (currentUser, equbId) => {
+  const equb = await prisma.equb.findFirst({
+    where: { id: equbId, deletedAt: null },
+    include: {
+      _count: {
+        select: {
+          members: { where: { status: "active" } },
+          payments: { where: { status: "approved" } },
+          payouts: { where: { status: "paid" } },
+        },
+      },
+    },
+  });
+  if (!equb) throw new AppError("Equb not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== equb.condoId) {
+    throw new AppError("You do not have permission to delete this Equb", 403);
+  }
+
+  const blockers = [];
+  if (equb._count.members > 0) {
+    blockers.push(`${equb._count.members} active member(s)`);
+  }
+  if (equb._count.payments > 0) {
+    blockers.push(`${equb._count.payments} verified contribution record(s)`);
+  }
+  if (equb._count.payouts > 0) {
+    blockers.push(`${equb._count.payouts} completed payout(s)`);
+  }
+
+  if (blockers.length > 0) {
+    throw new AppError(
+      `Cannot delete Equb "${equb.name}": It has ${blockers.join(", ")}. To discontinue this Equb while preserving historical records, change its status to 'cancelled' instead.`,
+      409
+    );
+  }
+
+  await prisma.equb.update({
+    where: { id: equbId },
+    data: { deletedAt: new Date(), status: "cancelled" },
+  });
+
+  return { message: "Equb deleted successfully" };
+};
+
+
+export const createAdminIddirService = async (currentUser, payload) => {
+  const condoId = payload.condoId || currentUser.condoId;
+  if (!condoId) throw new AppError("Condo ID is required", 400);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== condoId) {
+    throw new AppError("You can only create Iddirs in your own condominium", 403);
+  }
+
+  const condo = await prisma.condo.findFirst({
+    where: { id: String(condoId), deletedAt: null },
+  });
+  if (!condo) throw new AppError("Condominium not found", 404);
+  if (!condo.activeStatus) throw new AppError("Condominium is inactive", 400);
+
+  const iddir = await prisma.iddir.create({
+    data: {
+      condoId,
+      createdById: currentUser.id,
+      name: payload.name?.trim(),
+      contributionAmount: Number(payload.contributionAmount),
+      startedDate: new Date(payload.startedDate || new Date()),
+      noMembers: 0,
+      status: payload.status || "active",
+    },
+    include: {
+      condo: { select: { id: true, condoCode: true, condoName: true } },
+      createdBy: { select: { id: true, fullName: true, email: true } },
+    },
+  });
+
   return iddir;
 };
 
 
+export const updateAdminIddirService = async (currentUser, iddirId, payload) => {
+  const iddir = await prisma.iddir.findFirst({
+    where: { id: iddirId, deletedAt: null },
+  });
+  if (!iddir) throw new AppError("Iddir not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== iddir.condoId) {
+    throw new AppError("You do not have permission to update this Iddir", 403);
+  }
+
+  const data = {};
+  if (payload.name) data.name = payload.name.trim();
+  if (payload.contributionAmount) data.contributionAmount = Number(payload.contributionAmount);
+  if (payload.startedDate) data.startedDate = new Date(payload.startedDate);
+  if (payload.status) data.status = payload.status;
+
+  const updated = await prisma.iddir.update({
+    where: { id: iddirId },
+    data,
+    include: {
+      condo: { select: { id: true, condoCode: true, condoName: true } },
+      createdBy: { select: { id: true, fullName: true, email: true } },
+    },
+  });
+
+  return updated;
+};
+
+
+export const deleteAdminIddirService = async (currentUser, iddirId) => {
+  const iddir = await prisma.iddir.findFirst({
+    where: { id: iddirId, deletedAt: null },
+    include: {
+      _count: {
+        select: {
+          members: { where: { status: "active" } },
+          payments: { where: { status: "approved" } },
+        },
+      },
+      members: {
+        select: { totalReceived: true },
+      },
+    },
+  });
+  if (!iddir) throw new AppError("Iddir not found", 404);
+
+  if (currentUser.role === "condo_admin" && currentUser.condoId !== iddir.condoId) {
+    throw new AppError("You do not have permission to delete this Iddir", 403);
+  }
+
+  const totalDisbursed = iddir.members.reduce((sum, m) => sum + Number(m.totalReceived || 0), 0);
+  const blockers = [];
+  if (iddir._count.members > 0) {
+    blockers.push(`${iddir._count.members} active member(s)`);
+  }
+  if (iddir._count.payments > 0) {
+    blockers.push(`${iddir._count.payments} verified contribution record(s)`);
+  }
+  if (totalDisbursed > 0) {
+    blockers.push(`ETB ${totalDisbursed.toLocaleString()} in aid disbursements`);
+  }
+
+  if (blockers.length > 0) {
+    throw new AppError(
+      `Cannot delete Iddir "${iddir.name}": It has ${blockers.join(", ")}. To discontinue this Iddir while preserving historical records, change its status to 'inactive' instead.`,
+      409
+    );
+  }
+
+  await prisma.iddir.update({
+    where: { id: iddirId },
+    data: { deletedAt: new Date(), status: "inactive" },
+  });
+
+  return { message: "Iddir deleted successfully" };
+};

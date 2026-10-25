@@ -1,5 +1,6 @@
 // socket/socket.setup.js
 import { Server } from "socket.io";
+import { verifyAccessToken } from "../utils/jwt.js";
 
 let io;
 
@@ -40,6 +41,19 @@ export const initializeSocket = (server) => {
     if (socket.condoId) {
       socket.join(`condo_${socket.condoId}`);
     }
+
+    // Join item chat room if requested
+    socket.on("joinItemChat", (lostFoundId) => {
+      if (lostFoundId) {
+        socket.join(`lostFound_${lostFoundId}`);
+      }
+    });
+
+    socket.on("leaveItemChat", (lostFoundId) => {
+      if (lostFoundId) {
+        socket.leave(`lostFound_${lostFoundId}`);
+      }
+    });
 
     // Handle disconnection
     socket.on("disconnect", () => {

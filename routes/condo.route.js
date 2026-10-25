@@ -10,6 +10,12 @@ import {
   deleteCondo,
   toggleCondoStatus
 } from "../controllers/condo.controller.js";
+import {
+  getAdminEqubs,
+  createAdminEqub,
+  getAdminIddirs,
+  createAdminIddir
+} from "../controllers/admin.controller.js";
 
 import { authenticate } from "../middleware/auth.middleware.js";
 import { authorizeRoles } from "../middleware/role.middleware.js";
@@ -29,13 +35,39 @@ router.post(
 // GET ALL
 router.get(
   "/",
-    getAllCondos
+  getAllCondos
 );
 
 // SEARCH
 router.get(
   "/search",
   searchCondos
+);
+
+// CONDO-SPECIFIC EQUB ROUTES
+router.get(
+  "/:condoId/equbs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminEqubs
+);
+
+router.post(
+  "/:condoId/equbs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  createAdminEqub
+);
+
+// CONDO-SPECIFIC IDDIR ROUTES
+router.get(
+  "/:condoId/iddirs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  getAdminIddirs
+);
+
+router.post(
+  "/:condoId/iddirs",
+  authorizeRoles(Roles.CONDO_ADMIN, Roles.SUPER_ADMIN),
+  createAdminIddir
 );
 
 // GET BY CODE

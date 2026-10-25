@@ -11,6 +11,18 @@ import {
   getAdminPaymentsService,
   getAdminTransactionsService,
   getAdminServiceFeesService,
+  getAdminEqubByIdService,
+  createAdminEqubService,
+  updateAdminEqubService,
+  deleteAdminEqubService,
+  drawAdminEqubWinnerService,
+  adminRecordEqubContributionService,
+  getAdminIddirByIdService,
+  createAdminIddirService,
+  updateAdminIddirService,
+  deleteAdminIddirService,
+  adminRecordIddirContributionService,
+  adminDisburseIddirFundService,
 } from "../services/admin.service.js";
 
 
@@ -226,6 +238,119 @@ export const getAdminServiceFees = async (req, res, next) => {
       success: true,
       ...result,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── EQUB MANAGEMENT HANDLERS ──────────────────────────────────────────────────
+
+export const getAdminEqubById = async (req, res, next) => {
+  try {
+    const result = await getAdminEqubByIdService(req.user, req.params.id);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createAdminEqub = async (req, res, next) => {
+  try {
+    const result = await createAdminEqubService(req.user, req.body);
+    res.status(201).json({ success: true, message: "Equb created successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAdminEqub = async (req, res, next) => {
+  try {
+    const result = await updateAdminEqubService(req.user, req.params.id, req.body);
+    res.status(200).json({ success: true, message: "Equb updated successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteAdminEqub = async (req, res, next) => {
+  try {
+    const result = await deleteAdminEqubService(req.user, req.params.id);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const drawAdminEqubWinner = async (req, res, next) => {
+  try {
+    const result = await drawAdminEqubWinnerService(req.user, req.params.equbId, req.body);
+    res.status(200).json({ success: true, message: "Equb winner drawn successfully!", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminRecordEqubContribution = async (req, res, next) => {
+  try {
+    const result = await adminRecordEqubContributionService(req.user, req.params.equbId, req.params.userId, req.body);
+    res.status(200).json({ success: true, message: "Contribution recorded successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ── IDDIR MANAGEMENT HANDLERS ─────────────────────────────────────────────────
+
+export const getAdminIddirById = async (req, res, next) => {
+  try {
+    const result = await getAdminIddirByIdService(req.user, req.params.id);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createAdminIddir = async (req, res, next) => {
+  try {
+    const result = await createAdminIddirService(req.user, req.body);
+    res.status(201).json({ success: true, message: "Iddir created successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAdminIddir = async (req, res, next) => {
+  try {
+    const result = await updateAdminIddirService(req.user, req.params.id, req.body);
+    res.status(200).json({ success: true, message: "Iddir updated successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteAdminIddir = async (req, res, next) => {
+  try {
+    const result = await deleteAdminIddirService(req.user, req.params.id);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminRecordIddirContribution = async (req, res, next) => {
+  try {
+    const result = await adminRecordIddirContributionService(req.user, req.params.iddirId, req.params.userId, req.body);
+    res.status(200).json({ success: true, message: "Contribution recorded successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const adminDisburseIddirFund = async (req, res, next) => {
+  try {
+    const result = await adminDisburseIddirFundService(req.user, req.params.iddirId, req.body);
+    res.status(200).json({ success: true, message: "Iddir funds disbursed successfully!", data: result });
   } catch (error) {
     next(error);
   }

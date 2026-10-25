@@ -47,14 +47,20 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
 
   // Emit socket event for real-time updates
   if (req.app.get('io')) {
-    req.app.get('io')
-      .to(`condo_${result.condoId}`)
-      .emit('newAnnouncement', result);
+    if (Array.isArray(result)) {
+      result.forEach(item => {
+        req.app.get('io').to(`condo_${item.condoId}`).emit('newAnnouncement', item);
+      });
+    } else if (result?.condoId) {
+      req.app.get('io').to(`condo_${result.condoId}`).emit('newAnnouncement', result);
+    }
   }
 
   res.status(201).json({
     success: true,
-    message: "Announcement created successfully",
+    message: Array.isArray(result)
+      ? `Announcement created for ${result.length} condominiums`
+      : "Announcement created successfully",
     data: result
   });
 });
