@@ -5,33 +5,48 @@ import AppError from "../errorhandler/AppError.js";
 // Get all promotions (Public - anyone can view)
 export const getAllPromotionsService = async (filters = {}) => {
   try {
-    const { type, category, status = 'active', search, page = 1, limit = 20 } = filters;
+    const { type, category, status = 'active', search, page = 1, limit = 20, condoId } = filters;
     const skip = (page - 1) * limit;
 
-    const where = {
-      deletedAt: null,
-      isActive: true
-    };
+    const andConditions = [
+      { deletedAt: null }
+    ];
 
     if (status === 'active') {
-      where.status = 'active';
-      where.expiresAt = { gt: new Date() };
+      andConditions.push({ 
+        isActive: true,
+        status: { in: ['active', 'approved'] }, 
+        expiresAt: { gt: new Date() } 
+      });
     } else if (status === 'all') {
-      // Admin can see all
+      // Admin can see all statuses (both active, pending, inactive)
     } else {
-      where.status = status;
+      andConditions.push({ status: status });
     }
 
-    if (type) where.type = type;
-    if (category) where.category = category;
+    if (type) andConditions.push({ type });
+    if (category) andConditions.push({ category });
+
+    if (condoId && condoId !== 'ALL') {
+      andConditions.push({
+        OR: [
+          { condoId: condoId },
+          { condoId: null } // Global promotions
+        ]
+      });
+    }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { businessName: { contains: search, mode: 'insensitive' } }
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { businessName: { contains: search, mode: 'insensitive' } }
+        ]
+      });
     }
+
+    const where = { AND: andConditions };
 
     const [items, total] = await Promise.all([
       prisma.promotion.findMany({
@@ -123,12 +138,13 @@ export const getPromotionByIdService = async (promotionId) => {
       throw new AppError("Promotion not found", 404);
     }
 
-    await prisma.promotion.update({
+    const updated = await prisma.promotion.update({
       where: { id: promotionId },
-      data: { views: { increment: 1 } }
+      data: { views: { increment: 1 } },
+      select: { views: true }
     });
 
-    return promotion;
+    return { ...promotion, views: updated.views };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("Failed to fetch promotion", 500);
@@ -140,7 +156,7 @@ export const createPromotionService = async (userId, data, files = null) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, fullName: true, role: true }
+      select: { id: true, fullName: true, role: true, condoId: true }
     });
 
     if (!['condo_admin', 'super_admin'].includes(user?.role)) {
@@ -149,7 +165,7 @@ export const createPromotionService = async (userId, data, files = null) => {
 
     const { 
       title, description, type, category, price, businessName, contactPerson,
-      contactNumber, email, websiteUrl, expiresAt, condoId
+      contactNumber, email, websiteUrl, expiresAt, condoId, condoIds
     } = data;
 
     let imageUrl = null;
@@ -177,58 +193,95 @@ export const createPromotionService = async (userId, data, files = null) => {
       }
     }
 
-    let targetCondoId = condoId || null;
-    if (targetCondoId) {
-      const condo = await prisma.condo.findUnique({
-        where: { id: targetCondoId }
+    let targetCondoIds = [];
+
+    if (user?.role === 'super_admin') {
+      let requested = [];
+      if (Array.isArray(condoIds)) {
+        requested = condoIds;
+      } else if (typeof condoIds === 'string') {
+        try {
+          const parsed = JSON.parse(condoIds);
+          requested = Array.isArray(parsed) ? parsed : [condoIds];
+        } catch {
+          requested = [condoIds];
+        }
+      } else if (condoId) {
+        requested = [condoId];
+      }
+
+      if (requested.includes('ALL') || requested.includes('GLOBAL') || requested.length === 0) {
+        targetCondoIds = [null]; // Global promotion visible everywhere
+      } else {
+        targetCondoIds = requested.filter(id => id && id !== 'ALL' && id !== 'GLOBAL');
+        if (targetCondoIds.length === 0) targetCondoIds = [null];
+      }
+    } else {
+      if (!user?.condoId) {
+        throw new AppError("Admin not associated with any condo", 400);
+      }
+      targetCondoIds = [user.condoId];
+    }
+
+    // Verify non-null target condo IDs exist
+    const specificIds = targetCondoIds.filter(id => id !== null);
+    if (specificIds.length > 0) {
+      const validCondos = await prisma.condo.findMany({
+        where: { id: { in: specificIds }, deletedAt: null },
+        select: { id: true }
       });
-      if (!condo) {
-        throw new AppError("Condo not found", 404);
+      if (validCondos.length !== specificIds.length) {
+        throw new AppError("One or more selected condominiums do not exist", 404);
       }
     }
 
-    const newPromotion = await prisma.promotion.create({
-      data: {
-        title,
-        description,
-        type,
-        category: category || null,
-        price: parseFloat(price),
-        currency: 'ETB',
-        businessName,
-        contactPerson: contactPerson || null,
-        contactNumber,
-        email: email || null,
-        websiteUrl: websiteUrl || null,
-        imageUrl,
-        additionalImages,
-        expiresAt: new Date(expiresAt),
-        status: 'pending',
-        isActive: true,
-        postedById: user.id,
-        postedByRole: user.role === 'super_admin' ? 'super_admin' : 'admin',
-        condoId: targetCondoId
-      },
-      include: {
-        postedBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            profilePhoto: true
+    const createdList = await prisma.$transaction(
+      targetCondoIds.map(cId =>
+        prisma.promotion.create({
+          data: {
+            title,
+            description,
+            type,
+            category: category || null,
+            price: parseFloat(price),
+            currency: 'ETB',
+            businessName,
+            contactPerson: contactPerson || null,
+            contactNumber,
+            email: email || null,
+            websiteUrl: websiteUrl || null,
+            imageUrl,
+            additionalImages,
+            expiresAt: new Date(expiresAt),
+            status: user.role === 'super_admin' ? 'active' : 'pending',
+          isActive: true,
+          publishedAt: user.role === 'super_admin' ? new Date() : null,
+            postedById: user.id,
+            postedByRole: user.role === 'super_admin' ? 'super_admin' : 'admin',
+            condoId: cId
+          },
+          include: {
+            postedBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                profilePhoto: true
+              }
+            },
+            condo: {
+              select: {
+                id: true,
+                condoName: true,
+                condoCode: true
+              }
+            }
           }
-        },
-        condo: {
-          select: {
-            id: true,
-            condoName: true,
-            condoCode: true
-          }
-        }
-      }
-    });
+        })
+      )
+    );
 
-    return newPromotion;
+    return createdList.length === 1 ? createdList[0] : createdList;
   } catch (error) {
     console.error('Create promotion error:', error);
     if (error instanceof AppError) throw error;
@@ -251,6 +304,16 @@ export const reviewPromotionService = async (userId, userRole, promotionId, data
       throw new AppError("Promotion not found", 404);
     }
 
+    if (userRole === 'condo_admin') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { condoId: true }
+      });
+      if (!user?.condoId || existingPromotion.condoId !== user.condoId) {
+        throw new AppError("You can only review promotions in your condominium", 403);
+      }
+    }
+
     if (existingPromotion.status !== 'pending') {
       throw new AppError("This promotion has already been reviewed", 400);
     }
@@ -258,7 +321,7 @@ export const reviewPromotionService = async (userId, userRole, promotionId, data
     const { status, rejectionReason } = data;
 
     const updateData = {
-      status: status,
+        status: status === 'approved' ? 'active' : 'rejected',
       reviewedById: userId,
       reviewedAt: new Date(),
       isActive: status === 'approved'
@@ -319,6 +382,16 @@ export const updatePromotionService = async (userId, userRole, promotionId, data
 
     if (!existingPromotion) {
       throw new AppError("Promotion not found", 404);
+    }
+
+    if (userRole === 'condo_admin') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { condoId: true }
+      });
+      if (!user?.condoId || existingPromotion.condoId !== user.condoId) {
+        throw new AppError("You can only manage promotions in your condominium", 403);
+      }
     }
 
     let updateData = { ...data };
@@ -407,6 +480,16 @@ export const deletePromotionService = async (userId, userRole, promotionId) => {
 
     if (!existingPromotion) {
       throw new AppError("Promotion not found", 404);
+    }
+
+    if (userRole === 'condo_admin') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { condoId: true }
+      });
+      if (!user?.condoId || existingPromotion.condoId !== user.condoId) {
+        throw new AppError("You can only delete promotions in your condominium", 403);
+      }
     }
 
     const deletedPromotion = await prisma.promotion.update({
