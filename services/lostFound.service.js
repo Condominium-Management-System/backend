@@ -35,7 +35,7 @@ export const getAllLostFoundService = async (userId, filters = {}) => {
       targetCondoId = (filters.condoId && filters.condoId !== 'ALL') ? filters.condoId : null;
     } else {
       if (!targetCondoId) {
-        throw new AppError("User not associated with any condo", 400);
+        return { items: [], pagination: { total: 0, page: 1, limit: parseInt(limit) || 20, totalPages: 0 } };
       }
     }
 
