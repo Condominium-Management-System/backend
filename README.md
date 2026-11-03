@@ -2,7 +2,8 @@
 > - 💻 **Frontend Web Portal (Repository):** [https://github.com/Condominium-Management-System/React-Frontend](https://github.com/Condominium-Management-System/React-Frontend)
 > - 🚀 **Live Deployed Application:** [https://homeaxiz.vercel.app](https://homeaxiz.vercel.app)
 > - ⚙️ **Backend API (Repository):** [https://github.com/Condominium-Management-System/backend](https://github.com/Condominium-Management-System/backend)
-
+> - DEMO VIDEO         https://drive.google.com/file/d/1yn4MMKkdkUN5DRwS0XvWJPXndjC1TE7I/view
+> - DOCUMENTAION    https://drive.google.com/file/d/12N9UXfCwPfG8u9yHEd1V9jfEsiaum6r2/view?usp=sharing
 ---
 
 # HomeAxis Backend API — Enterprise Condominium Management System
